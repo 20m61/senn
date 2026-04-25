@@ -18,6 +18,28 @@ import {
   verifyManifest,
 } from "../packages/manifest/src/index.js";
 
+// ADR-0017 v2 closed-enum categories. v1 readers ignore the new field.
+const KNOWN_CATEGORIES: readonly string[] = [
+  "communication",
+  "creative",
+  "productivity",
+  "presence",
+  "files",
+  "games",
+  "education",
+  "accessibility",
+  "developer-tools",
+  "other",
+];
+
+const TAG_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+interface AddonDeprecation {
+  readonly since: string;
+  readonly reason: string;
+  readonly supersededBy?: string;
+}
+
 interface RegistryAddon {
   readonly id: string;
   readonly name: string;
@@ -25,10 +47,14 @@ interface RegistryAddon {
   readonly description: string;
   readonly path: string;
   readonly capabilities: readonly string[];
+  // ADR-0017 v2 optional fields. Always undefined when reading a v1 registry.
+  readonly categories?: readonly string[];
+  readonly tags?: readonly string[];
+  readonly deprecated?: AddonDeprecation;
 }
 
-interface RegistryV1 {
-  readonly v: 1;
+interface Registry {
+  readonly v: 1 | 2;
   readonly publisher: { readonly name: string; readonly homepage?: string };
   readonly trustedKeys: readonly string[];
   readonly addons: readonly RegistryAddon[];
@@ -69,10 +95,32 @@ function isStringArray(v: unknown): v is readonly string[] {
   return Array.isArray(v) && v.every((x) => typeof x === "string");
 }
 
-function validateRegistry(input: unknown): RegistryV1 {
+function validateAddonDeprecation(value: unknown, where: string): AddonDeprecation {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${where}.deprecated: must be an object`);
+  }
+  const d = value as Record<string, unknown>;
+  if (typeof d.since !== "string" || Number.isNaN(Date.parse(d.since))) {
+    throw new Error(`${where}.deprecated.since: must be ISO-8601`);
+  }
+  if (typeof d.reason !== "string" || d.reason.length === 0 || d.reason.length > 280) {
+    throw new Error(`${where}.deprecated.reason: must be 1..280 char string`);
+  }
+  if (d.supersededBy !== undefined && typeof d.supersededBy !== "string") {
+    throw new Error(`${where}.deprecated.supersededBy: must be a string when present`);
+  }
+  return {
+    since: d.since,
+    reason: d.reason,
+    ...(typeof d.supersededBy === "string" ? { supersededBy: d.supersededBy } : {}),
+  };
+}
+
+function validateRegistry(input: unknown): Registry {
   if (!input || typeof input !== "object") throw new Error("registry: not an object");
   const o = input as Record<string, unknown>;
-  if (o.v !== 1) throw new Error("registry: v must be 1");
+  if (o.v !== 1 && o.v !== 2) throw new Error("registry: v must be 1 or 2");
+  const v = o.v as 1 | 2;
   const pub = o.publisher;
   if (!pub || typeof pub !== "object") throw new Error("registry: publisher must be an object");
   const publisher = pub as Record<string, unknown>;
@@ -83,13 +131,46 @@ function validateRegistry(input: unknown): RegistryV1 {
   }
   if (!Array.isArray(o.addons)) throw new Error("registry: addons must be an array");
   const addons: RegistryAddon[] = o.addons.map((raw, i) => {
-    if (!raw || typeof raw !== "object") throw new Error(`addon[${i}]: not an object`);
+    const where = `addon[${i}]`;
+    if (!raw || typeof raw !== "object") throw new Error(`${where}: not an object`);
     const a = raw as Record<string, unknown>;
     for (const k of ["id", "name", "version", "description", "path"]) {
-      if (typeof a[k] !== "string") throw new Error(`addon[${i}].${k}: must be string`);
+      if (typeof a[k] !== "string") throw new Error(`${where}.${k}: must be string`);
     }
     if (!isStringArray(a.capabilities))
-      throw new Error(`addon[${i}].capabilities: must be string array`);
+      throw new Error(`${where}.capabilities: must be string array`);
+    // v2 optional fields; absence is fine even on v2 registries.
+    let categories: readonly string[] | undefined;
+    if (a.categories !== undefined) {
+      if (!isStringArray(a.categories)) {
+        throw new Error(`${where}.categories: must be string array`);
+      }
+      for (const c of a.categories) {
+        if (!KNOWN_CATEGORIES.includes(c)) {
+          throw new Error(
+            `${where}.categories: unknown category ${JSON.stringify(c)} (allowed: ${KNOWN_CATEGORIES.join(", ")})`,
+          );
+        }
+      }
+      categories = a.categories;
+    }
+    let tags: readonly string[] | undefined;
+    if (a.tags !== undefined) {
+      if (!isStringArray(a.tags)) throw new Error(`${where}.tags: must be string array`);
+      if (a.tags.length > 8) throw new Error(`${where}.tags: at most 8 entries`);
+      for (const t of a.tags) {
+        if (!TAG_PATTERN.test(t)) {
+          throw new Error(
+            `${where}.tags: invalid tag ${JSON.stringify(t)} (kebab-case, ≤32 chars)`,
+          );
+        }
+      }
+      tags = a.tags;
+    }
+    let deprecated: AddonDeprecation | undefined;
+    if (a.deprecated !== undefined) {
+      deprecated = validateAddonDeprecation(a.deprecated, where);
+    }
     return {
       id: a.id as string,
       name: a.name as string,
@@ -97,10 +178,23 @@ function validateRegistry(input: unknown): RegistryV1 {
       description: a.description as string,
       path: a.path as string,
       capabilities: a.capabilities,
+      ...(categories ? { categories } : {}),
+      ...(tags ? { tags } : {}),
+      ...(deprecated ? { deprecated } : {}),
     };
   });
+  // Cross-check: deprecated.supersededBy SHOULD point at another id in this
+  // registry. Across-registry pointers are allowed but not validated here.
+  const ids = new Set(addons.map((a) => a.id));
+  for (const a of addons) {
+    if (a.deprecated?.supersededBy && !ids.has(a.deprecated.supersededBy)) {
+      throw new Error(
+        `addon ${a.id}: deprecated.supersededBy ${a.deprecated.supersededBy} is not present in this registry`,
+      );
+    }
+  }
   return {
-    v: 1,
+    v,
     publisher: {
       name: publisher.name,
       ...(typeof publisher.homepage === "string" ? { homepage: publisher.homepage } : {}),

@@ -1,5 +1,5 @@
 {
-  "v": 1,
+  "v": 2,
   "publisher": {
     "name": "SENN Project",
     "homepage": "https://github.com/20m61/senn"
@@ -12,7 +12,9 @@
       "version": "0.1.0",
       "description": "Echoes any payload it receives, prefixed with 'echo:'.",
       "path": "apps/web/public/addons/echo",
-      "capabilities": ["echo-v1"]
+      "capabilities": ["echo-v1"],
+      "categories": ["developer-tools"],
+      "tags": ["reference", "bridge-demo"]
     },
     {
       "id": "dev.senn.whiteboard",
@@ -20,7 +22,9 @@
       "version": "0.1.0",
       "description": "Shared whiteboard. Strokes flow P2P; the canvas snapshot is local-first.",
       "path": "apps/web/public/addons/whiteboard",
-      "capabilities": ["whiteboard-v1"]
+      "capabilities": ["whiteboard-v1"],
+      "categories": ["creative"],
+      "tags": ["drawing", "p2p"]
     },
     {
       "id": "dev.senn.avatar-presence",
@@ -28,7 +32,9 @@
       "version": "0.1.0",
       "description": "Lightweight presence (speaking, emotion, reactions). No video — state only.",
       "path": "apps/web/public/addons/avatar-presence",
-      "capabilities": ["avatar-presence-v1"]
+      "capabilities": ["avatar-presence-v1"],
+      "categories": ["presence"],
+      "tags": ["reactions", "speaking"]
     },
     {
       "id": "dev.senn.local-vault",
@@ -36,7 +42,9 @@
       "version": "0.1.0",
       "description": "Stores user-selected files locally and ships them P2P (≤ 4 MiB chunked) to the connected peer.",
       "path": "apps/web/public/addons/local-vault",
-      "capabilities": ["local-vault-v1"]
+      "capabilities": ["local-vault-v1"],
+      "categories": ["files"],
+      "tags": ["transfer", "local-first"]
     },
     {
       "id": "dev.senn.voice-meter",
@@ -44,7 +52,9 @@
       "version": "0.1.0",
       "description": "Visualises microphone-derived audio level via the audio.level bridge — no raw audio is exposed to the add-on.",
       "path": "apps/web/public/addons/voice-meter",
-      "capabilities": ["voice-meter-v1"]
+      "capabilities": ["voice-meter-v1"],
+      "categories": ["presence"],
+      "tags": ["audio-level"]
     },
     {
       "id": "dev.senn.voice-call",
@@ -52,7 +62,9 @@
       "version": "0.1.0",
       "description": "Reference 1:1 voice call. Asks the host to send mic + receive remote audio via the media.* bridge; the addon never sees raw audio (ADR-0015).",
       "path": "apps/web/public/addons/voice-call",
-      "capabilities": ["voice-call-v1"]
+      "capabilities": ["voice-call-v1"],
+      "categories": ["communication"],
+      "tags": ["audio", "media-bridge"]
     },
     {
       "id": "dev.senn.minimal",
@@ -60,7 +72,9 @@
       "version": "0.0.1",
       "description": "Smallest possible SENN add-on, used as a template and for runtime tests.",
       "path": "examples/minimal-addon",
-      "capabilities": ["minimal-v1"]
+      "capabilities": ["minimal-v1"],
+      "categories": ["developer-tools"],
+      "tags": ["template"]
     }
   ]
 }

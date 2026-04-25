@@ -7,7 +7,13 @@ add-on it ships, plus the list of add-ons covered by that key.
 This is only the *publisher's* index. Hosts using SENN are free to
 ignore it, ship their own, or merge it with others.
 
-## Schema (v1)
+## Schema
+
+Two versions are valid. v1 is supported indefinitely; v2 (per
+[ADR-0017](../../docs/adr/0017-registry-schema-v2.md)) layers
+optional discovery + lifecycle metadata on top.
+
+### v1 (still valid)
 
 ```ts
 interface OfficialRegistryV1 {
@@ -26,6 +32,45 @@ interface OfficialRegistryAddonV1 {
   readonly capabilities: readonly string[];
 }
 ```
+
+### v2 (current shipping shape)
+
+```ts
+interface OfficialRegistryV2 {
+  readonly v: 2;
+  readonly publisher: { readonly name: string; readonly homepage?: string };
+  readonly trustedKeys: readonly string[];
+  readonly addons: readonly OfficialRegistryAddonV2[];
+}
+
+interface OfficialRegistryAddonV2 {
+  // unchanged from v1
+  readonly id: string;
+  readonly name: string;
+  readonly version: string;
+  readonly description: string;
+  readonly path: string;
+  readonly capabilities: readonly string[];
+
+  // optional, all additive
+  readonly categories?: readonly RegistryCategory[];   // closed enum, see ADR-0017
+  readonly tags?: readonly string[];                   // free-form, kebab-case, ≤ 8 × 32
+  readonly deprecated?: AddonDeprecationV1;
+}
+
+interface AddonDeprecationV1 {
+  readonly since: string;             // ISO-8601
+  readonly reason: string;            // ≤ 280 chars
+  readonly supersededBy?: string;     // ideally an addon id in the same registry
+}
+
+type RegistryCategory =
+  | "communication" | "creative" | "productivity" | "presence" | "files"
+  | "games" | "education" | "accessibility" | "developer-tools" | "other";
+```
+
+`pnpm verify:official` accepts both v1 and v2 inputs and validates the
+v2 optional fields when they are present.
 
 ## Conformance
 

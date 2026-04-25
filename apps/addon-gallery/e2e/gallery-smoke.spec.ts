@@ -57,6 +57,29 @@ test.describe("Add-on gallery smoke (ADR-0016)", () => {
     await ctx.close();
   });
 
+  test("category filter narrows cards to a single category (ADR-0017 v2)", async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await seedHostAndRegistry(page);
+    await page.goto("/");
+
+    await expect(page.locator("#config-status")).toContainText("loaded", { timeout: SHORT });
+
+    // Pick "communication" — the only voice-call entry should remain.
+    await page.locator('[data-testid="filter-cat"]').selectOption("communication");
+    await expect(page.locator('[data-testid="addon-card-dev.senn.voice-call"]')).toBeVisible({
+      timeout: SHORT,
+    });
+    await expect(page.locator('[data-testid="addon-card-dev.senn.whiteboard"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="addon-card-dev.senn.local-vault"]')).toHaveCount(0);
+
+    // Reset → all back.
+    await page.locator('[data-testid="filter-cat"]').selectOption("");
+    await expect(page.locator('[data-testid="addon-card-dev.senn.whiteboard"]')).toBeVisible();
+
+    await ctx.close();
+  });
+
   test("Open in SENN host link uses the ?addon=&publisher= deep-link form", async ({ browser }) => {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();

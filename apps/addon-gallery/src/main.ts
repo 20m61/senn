@@ -17,6 +17,13 @@ import {
   verifyManifest,
 } from "@senn/manifest";
 
+// Accepts ADR-0017 v1 + v2 inputs.
+interface AddonDeprecation {
+  readonly since: string;
+  readonly reason: string;
+  readonly supersededBy?: string;
+}
+
 interface RegistryAddonV1 {
   readonly id: string;
   readonly name: string;
@@ -24,10 +31,13 @@ interface RegistryAddonV1 {
   readonly description: string;
   readonly path: string;
   readonly capabilities: readonly string[];
+  readonly categories?: readonly string[];
+  readonly tags?: readonly string[];
+  readonly deprecated?: AddonDeprecation;
 }
 
 interface RegistryV1 {
-  readonly v: 1;
+  readonly v: 1 | 2;
   readonly publisher: { readonly name: string; readonly homepage?: string };
   readonly trustedKeys: readonly string[];
   readonly addons: readonly RegistryAddonV1[];
@@ -157,7 +167,7 @@ async function fetchBytes(url: string): Promise<Uint8Array> {
 function isRegistry(value: unknown): value is RegistryV1 {
   if (typeof value !== "object" || value === null) return false;
   const o = value as Record<string, unknown>;
-  if (o.v !== 1) return false;
+  if (o.v !== 1 && o.v !== 2) return false;
   if (typeof o.publisher !== "object" || o.publisher === null) return false;
   const pub = o.publisher as Record<string, unknown>;
   if (typeof pub.name !== "string") return false;
@@ -296,14 +306,27 @@ function unionCapabilities(): string[] {
   return [...set].sort();
 }
 
+function unionCategories(): string[] {
+  const set = new Set<string>();
+  for (const row of state.rows) for (const c of row.addon.categories ?? []) set.add(c);
+  return [...set].sort();
+}
+
 function renderFilters(): void {
   const cap = $("#filter-cap") as HTMLSelectElement | null;
+  const cat = $("#filter-cat") as HTMLSelectElement | null;
   const reg = $("#filter-reg") as HTMLSelectElement | null;
   if (cap) {
     const current = cap.value;
     cap.replaceChildren(new Option("(any)", ""));
     for (const c of unionCapabilities()) cap.append(new Option(c, c));
     cap.value = current;
+  }
+  if (cat) {
+    const current = cat.value;
+    cat.replaceChildren(new Option("(any)", ""));
+    for (const c of unionCategories()) cat.append(new Option(c, c));
+    cat.value = current;
   }
   if (reg) {
     const current = reg.value;
@@ -348,13 +371,16 @@ function renderCards(): void {
 
   const q = (($("#filter-q") as HTMLInputElement | null)?.value ?? "").trim().toLowerCase();
   const capSel = (($("#filter-cap") as HTMLSelectElement | null)?.value ?? "").trim();
+  const catSel = (($("#filter-cat") as HTMLSelectElement | null)?.value ?? "").trim();
   const regSel = (($("#filter-reg") as HTMLSelectElement | null)?.value ?? "").trim();
 
   const visible = state.rows.filter((row) => {
     if (regSel && row.registryUrl !== regSel) return false;
     if (capSel && !row.addon.capabilities.includes(capSel)) return false;
+    if (catSel && !(row.addon.categories ?? []).includes(catSel)) return false;
     if (q) {
-      const hay = `${row.addon.name}\n${row.addon.description}`.toLowerCase();
+      const hay =
+        `${row.addon.name}\n${row.addon.description}\n${(row.addon.tags ?? []).join(" ")}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -377,6 +403,16 @@ function renderCards(): void {
     id.className = "id";
     id.textContent = row.addon.id;
     head.append(name, id, badgeFor(row.verifyResult));
+    if (row.addon.deprecated) {
+      const dep = document.createElement("span");
+      dep.className = "badge badge-warn";
+      dep.dataset.testid = `addon-deprecated-${row.addon.id}`;
+      dep.textContent = "deprecated";
+      dep.title = `${row.addon.deprecated.reason}${
+        row.addon.deprecated.supersededBy ? ` → ${row.addon.deprecated.supersededBy}` : ""
+      }`;
+      head.append(dep);
+    }
     li.append(head);
 
     const desc = document.createElement("p");
@@ -384,9 +420,27 @@ function renderCards(): void {
     desc.textContent = row.addon.description;
     li.append(desc);
 
+    if (row.addon.deprecated) {
+      const depRow = document.createElement("p");
+      depRow.className = "meta mono";
+      depRow.dataset.testid = `addon-deprecated-row-${row.addon.id}`;
+      const supersededBy = row.addon.deprecated.supersededBy
+        ? ` → use ${row.addon.deprecated.supersededBy}`
+        : "";
+      depRow.textContent = `deprecated since ${row.addon.deprecated.since}: ${row.addon.deprecated.reason}${supersededBy}`;
+      li.append(depRow);
+    }
+
     const caps = document.createElement("p");
     caps.className = "meta mono";
-    caps.textContent = `capabilities: ${row.addon.capabilities.join(", ") || "(none)"}`;
+    const capParts = [`capabilities: ${row.addon.capabilities.join(", ") || "(none)"}`];
+    if (row.addon.categories && row.addon.categories.length > 0) {
+      capParts.push(`categories: ${row.addon.categories.join(", ")}`);
+    }
+    if (row.addon.tags && row.addon.tags.length > 0) {
+      capParts.push(`tags: ${row.addon.tags.join(", ")}`);
+    }
+    caps.textContent = capParts.join(" · ");
     li.append(caps);
 
     if (row.manifest?.permissions && row.manifest.permissions.length > 0) {
@@ -494,7 +548,7 @@ function bindUi(): void {
     });
   }
 
-  for (const sel of ["#filter-q", "#filter-cap", "#filter-reg"]) {
+  for (const sel of ["#filter-q", "#filter-cap", "#filter-cat", "#filter-reg"]) {
     const el = $(sel);
     if (!el) continue;
     el.addEventListener("input", () => renderCards());

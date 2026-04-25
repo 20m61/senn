@@ -621,6 +621,9 @@ callStopBtn?.addEventListener("click", async () => {
   }
 });
 
+// Accepts ADR-0017 v1 + v2 inputs. v2 fields are read-only metadata used
+// to surface a "deprecated" hint and category/tags to the launcher; v1
+// readers ignore them.
 interface RegistryAddonV1 {
   readonly id: string;
   readonly name: string;
@@ -628,9 +631,12 @@ interface RegistryAddonV1 {
   readonly description: string;
   readonly path: string;
   readonly capabilities: readonly string[];
+  readonly categories?: readonly string[];
+  readonly tags?: readonly string[];
+  readonly deprecated?: { since: string; reason: string; supersededBy?: string };
 }
 interface RegistryV1 {
-  readonly v: 1;
+  readonly v: 1 | 2;
   readonly publisher: { readonly name: string };
   readonly trustedKeys: readonly string[];
   readonly addons: readonly RegistryAddonV1[];
@@ -679,8 +685,22 @@ async function renderOfficialRegistry(): Promise<void> {
     desc.textContent = addon.description;
     const capRow = document.createElement("p");
     capRow.className = "muted mono";
-    capRow.textContent = `capabilities: ${addon.capabilities.join(", ")}`;
+    const metaParts = [`capabilities: ${addon.capabilities.join(", ")}`];
+    if (addon.categories && addon.categories.length > 0) {
+      metaParts.push(`categories: ${addon.categories.join(", ")}`);
+    }
+    capRow.textContent = metaParts.join(" · ");
     li.append(head, desc, capRow);
+    if (addon.deprecated) {
+      const dep = document.createElement("p");
+      dep.className = "muted mono";
+      dep.dataset.testid = `registry-deprecated-${addon.id}`;
+      const supersededBy = addon.deprecated.supersededBy
+        ? ` → use ${addon.deprecated.supersededBy}`
+        : "";
+      dep.textContent = `deprecated since ${addon.deprecated.since}: ${addon.deprecated.reason}${supersededBy}`;
+      li.append(dep);
+    }
     if (url) {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -745,7 +765,11 @@ async function handleHandoff(): Promise<void> {
     const res = await fetch(publisherUrl, { credentials: "omit" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = (await res.json()) as RegistryV1;
-    if (json.v !== 1 || !Array.isArray(json.trustedKeys) || json.trustedKeys.length === 0) {
+    if (
+      (json.v !== 1 && json.v !== 2) ||
+      !Array.isArray(json.trustedKeys) ||
+      json.trustedKeys.length === 0
+    ) {
       throw new Error("publisher registry schema invalid");
     }
     registry = json;
