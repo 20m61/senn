@@ -77,30 +77,41 @@ Inside the sandboxed iframe the add-on uses two surfaces:
 1. Browser standards available under the iframe's CSP. `connect-src 'none'`
    prohibits all network requests; `script-src 'self'` prohibits inline JS
    and remote modules.
-2. The Core add-on API, accessed via `postMessage` to `window.parent`. The
-   `@senn/addon-sdk` package wraps this bridge. Use it.
+2. The Core add-on bridge, accessed via `postMessage` to `window.parent`.
+   The `@senn/addon-sdk` runtime ships a classic script that exposes a
+   single `window.senn` global; the add-on loads it before its own code.
 
-```ts
-// addon.ts (compiled or shipped as an ES module)
-import { createAddon } from "@senn/addon-sdk";
+`addon-sdk-spec.md` is the normative shape of `window.senn`. Minimum
+useful surface:
 
-const addon = await createAddon({
-  id: "com.example.note",
-  version: "0.1.0",
+```js
+// addon.js — classic script, loaded after senn-addon-sdk.js
+senn.on("deliver", ({ payload, from }) => {
+  // handle a peer-sent payload (the host has already filtered to
+  // envelopes whose `addon` field equals our manifest id)
 });
 
-addon.peer.on("note-v1", (msg) => {
-  // handle a peer-sent envelope tagged with the "note-v1" capability
-});
+senn.peer.send({ type: "stroke", payload: { x: 12, y: 34 } });
 
-await addon.peer.send({
-  type: "stroke",
-  payload: { x: 12, y: 34 },
-});
+await senn.storage.put("draft", { title: "untitled" });
+const draft = await senn.storage.get("draft");
 
-await addon.storage.put("draft", { title: "untitled" });
-const draft = await addon.storage.get("draft");
+const ctx = await senn.ready(); // ctx = { addonId, version, sessionId }
 ```
+
+Larger surface (each gated by the matching `permissions` entry):
+
+| Bridge | SDK call | Manifest permission |
+|---|---|---|
+| Receive binary blobs from a peer | `senn.on("deliver-bin", ({ mime, bytes }) => …)` | `peer.receive.bin` |
+| Send binary blobs to a peer | `senn.peer.sendBinary({ mime, bytes })` (≤ 4 MiB chunked) | `peer.send.bin` |
+| Microphone-derived energy values, no raw audio | `senn.audio.subscribeLevel(level => …)` | `audio.level` |
+| Ask the host to attach the local mic / camera to the peer connection (ADR-0015) | `senn.media.startLocalAudio()` / `startLocalVideo({ source })` / `stop*()` | `media.send.audio`, `media.send.video` |
+| Receive a remote track event when the peer publishes one | `senn.media.onTrack(({ direction, track, state }) => …)` plus `senn.media.subscribeRemoteAudio()` / `subscribeRemoteVideo()` | `media.receive.audio`, `media.receive.video` |
+
+The add-on never sees a raw `MediaStreamTrack`. ADR-0015 is explicit
+that the host owns `getUserMedia` and the host-controlled `<audio>` /
+`<video>` element; the add-on only orchestrates start / stop / subscribe.
 
 ## Forbidden APIs (MUST NOT call)
 
@@ -122,12 +133,26 @@ const draft = await addon.storage.get("draft");
 - `storage.local.write` implies `storage.local.read` only if you also need
   to read; declare both explicitly.
 
+## Distribution and trust (MUST review before publishing)
+
+- Sign the manifest. ADR-0008 / ADR-0009 / ADR-0010 cover the Ed25519
+  detached signature, the keystore minimum, and key rotation. The host
+  app's `verify` mode (`required` / `optional` / `none`) determines
+  which loads even succeed; see `getting-started-addon.md` for the
+  publish flow.
+- A SENN gallery (ADR-0016) hands the user off to a SENN host with
+  `?addon=<manifestUrl>&publisher=<registryUrl>`. The host MUST
+  display the publisher's name + trustedKeys before loading. As an
+  add-on author you only ship `manifest.json` + `manifest.sig.json`
+  + your assets; the registry is the publisher's responsibility.
+
 ## Conformance commands (MUST run before declaring done)
 
 ```sh
-pnpm tsx scripts/validate-addon-manifest.ts <path-to-your manifest.json>
-# Once available:
-pnpm tsx scripts/build-addon.ts <addon-dir>
+pnpm validate:addon <path-to-your-manifest.json>   # tsx scripts/validate-addon-manifest.ts
+pnpm check:addon-forbidden                          # forbidden-API grep over registry dirs
+pnpm sign:manifest <addon-dir> --key keys/your.key.json
+pnpm verify:manifest <addon-dir> --trusted-key <publicKey>
 ```
 
 Manual checklist:

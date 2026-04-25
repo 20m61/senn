@@ -3,22 +3,27 @@
 ## Intent
 
 Ready-to-adapt recipes for the most common rich add-on patterns. Every
-recipe states the minimum manifest, the SDK calls, and the conformance
-notes. Copy, then customize.
+recipe states the minimum manifest and the SDK calls. The runtime is
+the classic-script `window.senn` global from
+[`addon-sdk-spec.md`](../addon-sdk-spec.md); each `index.html` loads
+`senn-addon-sdk.js` (copied from `packages/addon-sdk/runtime/`) before
+its own `addon.js`.
 
-If you are an AI agent generating an add-on, prefer adapting a recipe over
-inventing structure. Follow the manifest fields exactly; only add what you
-need.
+If you are an AI agent generating an add-on, prefer adapting a recipe
+over inventing structure. Follow the manifest fields exactly; only add
+what you need. The recipes below are condensed; the **shipping**
+versions of all of these (signed against the official trust root) live
+under `apps/web/public/addons/` and are the authoritative implementations.
 
 ## Recipe index
 
 | Recipe | What it shows | Minimum permissions |
 |--------|---------------|----------------------|
 | [Whiteboard](#whiteboard) | Stroke events over peers, optional local save | `peer.send`, `peer.receive`, `storage.local.write`, `ui.panel` |
-| [Avatar Presence](#avatar-presence) | Lightweight presence, no video | `peer.send`, `peer.receive`, `presence.read`, `audio.level`, `ui.overlay` |
-| [Local Vault](#local-vault) | Saved files / cards, listed and deletable | `storage.local.read`, `storage.local.write`, `file.write.user_approved`, `ui.panel` |
-| [File Drop](#file-drop) | User-selected file → peer | `peer.send`, `peer.receive`, `file.read.user_selected`, `ui.panel` |
-| [Local Profile](#local-profile) | Display name + icon, shared on join | `peer.send`, `peer.receive`, `storage.local.write`, `ui.panel` |
+| [Avatar Presence](#avatar-presence) | State-only presence (no video) — speaking + reactions | `peer.send`, `peer.receive`, `audio.level`, `ui.overlay` |
+| [Local Vault](#local-vault) | Saved files / cards, listed and deletable; chunked P2P transfer | `storage.local.read`, `storage.local.write`, `file.read.user_selected`, `file.write.user_approved`, `peer.send.bin`, `peer.receive.bin`, `ui.panel` |
+| [Voice Meter](#voice-meter) | Speaking detection without raw audio | `audio.level`, `ui.panel` |
+| [Voice Call](#voice-call) | 1:1 mic + remote audio via the ADR-0015 media bridge | `media.send.audio`, `media.receive.audio`, `ui.panel` |
 | [Co-pointer / cursor](#co-pointer) | Throttled pointer presence | `peer.send`, `peer.receive`, `ui.overlay` |
 
 ---
@@ -30,6 +35,7 @@ need.
   "id": "com.example.whiteboard",
   "name": "Whiteboard",
   "version": "0.1.0",
+  "description": "Shared whiteboard. Strokes flow P2P; the canvas snapshot is local-first.",
   "entry": "index.html",
   "license": "Apache-2.0",
   "network": false,
@@ -38,28 +44,26 @@ need.
 }
 ```
 
-```ts
-import { createAddon } from "@senn/addon-sdk";
-
-const addon = await createAddon({ id: "com.example.whiteboard", version: "0.1.0" });
-
-addon.peer.on("whiteboard-v1", (msg) => {
-  if (msg.type === "stroke") draw(msg.payload);
+```js
+// addon.js — loaded after senn-addon-sdk.js
+senn.on("deliver", ({ payload }) => {
+  if (payload?.type === "stroke") draw(payload.point);
 });
 
 canvas.addEventListener("pointermove", (e) => {
   if (!drawing) return;
-  addon.peer.send({ type: "stroke", payload: { x: e.offsetX, y: e.offsetY } });
+  senn.peer.send({ type: "stroke", point: { x: e.offsetX, y: e.offsetY } });
 });
 
 saveBtn.addEventListener("click", async () => {
-  await addon.storage.put("snapshot", canvas.toDataURL());
+  await senn.storage.put("snapshot", canvas.toDataURL());
 });
+
+senn.ready();
 ```
 
-Conformance notes: throttle stroke events (e.g. coalesce to 60 Hz max).
-SENN Core enforces a per-add-on rate limit; staying well under it keeps the
-add-on portable.
+Throttle stroke events (e.g. coalesce to 60 Hz). The add-on never opens
+its own data channel — `senn.peer.send` rides Core's `core.text` channel.
 
 ---
 
@@ -70,30 +74,35 @@ add-on portable.
   "id": "com.example.avatar-presence",
   "name": "Avatar Presence",
   "version": "0.1.0",
+  "description": "Lightweight presence (speaking, reactions). No video — state only.",
   "entry": "index.html",
   "license": "Apache-2.0",
   "network": false,
-  "permissions": ["peer.send", "peer.receive", "presence.read", "audio.level", "ui.overlay"],
+  "permissions": ["peer.send", "peer.receive", "audio.level", "ui.overlay"],
   "capabilities": ["avatar-presence-v1"]
 }
 ```
 
-```ts
-const addon = await createAddon({ id: "com.example.avatar-presence", version: "0.1.0" });
-
-addon.presence.on((p) => render(p.peerId, { speaking: p.speaking, level: p.audioLevel }));
-
-addon.peer.on("avatar-presence-v1", (msg) => {
-  if (msg.type === "reaction") spawnEmoji(msg.payload.emoji);
+```js
+// Speaking detection is energy-only; the host computes the level.
+senn.audio.subscribeLevel((level) => {
+  setSpeaking(level > 0.05);
+  if (level > 0.05) senn.peer.send({ type: "speaking", level });
 });
 
-reactionPicker.on("pick", (emoji) => {
-  addon.peer.send({ type: "reaction", payload: { emoji } });
+senn.on("deliver", ({ payload, from }) => {
+  if (payload?.type === "reaction") spawnEmoji(from, payload.emoji);
 });
+
+reactionPicker.addEventListener("pick", (ev) => {
+  senn.peer.send({ type: "reaction", emoji: ev.detail });
+});
+
+senn.ready();
 ```
 
-Conformance notes: never send raw audio or video. SENN's avatar presence
-relies on Core-derived metadata (`presence.read`, `audio.level`) only.
+Never send raw audio or video. Avatar presence is metadata only —
+that's what the `audio.level` permission is for.
 
 ---
 
@@ -104,91 +113,130 @@ relies on Core-derived metadata (`presence.read`, `audio.level`) only.
   "id": "com.example.local-vault",
   "name": "Local Vault",
   "version": "0.1.0",
+  "description": "Stores user-selected files locally and ships them P2P (≤ 4 MiB chunked).",
   "entry": "index.html",
   "license": "Apache-2.0",
   "network": false,
-  "permissions": ["storage.local.read", "storage.local.write", "file.write.user_approved", "ui.panel"],
+  "permissions": [
+    "storage.local.read",
+    "storage.local.write",
+    "file.read.user_selected",
+    "file.write.user_approved",
+    "peer.send.bin",
+    "peer.receive.bin",
+    "ui.panel"
+  ],
   "capabilities": ["local-vault-v1"]
 }
 ```
 
-```ts
-const addon = await createAddon({ id: "com.example.local-vault", version: "0.1.0" });
+```js
+// User-selected file → store locally + ship to peer.
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files?.[0];
+  if (!file) return;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  await senn.storage.put(file.name, { mime: file.type, size: bytes.byteLength });
+  senn.peer.sendBinary({ mime: file.type, bytes }); // chunked transparently up to 4 MiB
+});
 
-const items = await addon.storage.list();
+senn.on("deliver-bin", async ({ mime, bytes, from }) => {
+  // user-approved download — see file.write.user_approved
+  const ok = confirm(`Save ${bytes.byteLength} bytes from peer?`);
+  if (!ok) return;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  a.download = `from-${from ?? "peer"}.bin`;
+  a.click();
+});
+
+const items = await senn.storage.list();
 items.forEach(renderRow);
 
-deleteBtn.addEventListener("click", async (e) => {
-  await addon.storage.delete(e.currentTarget.dataset.key);
-});
+senn.ready();
 ```
 
-Conformance notes: `file.write.user_approved` requires a Core-mediated
-approval prompt; the add-on never writes files unprompted.
+`peer.sendBinary` accepts up to 4 MiB per logical message; PeerSession
+splits it into ≤ 60 KiB on-wire frames (ADR-0011 / ADR-0012). The
+addon does not see the chunking. `iframe sandbox` needs
+`allow-downloads` for the `a.click()` save flow — `AddonHost` adds
+that token automatically when the manifest declares
+`file.write.user_approved`.
 
 ---
 
-## File Drop
+## Voice Meter
 
 ```json
 {
-  "id": "com.example.file-drop",
-  "name": "File Drop",
+  "id": "com.example.voice-meter",
+  "name": "Voice Meter",
   "version": "0.1.0",
+  "description": "Visualises microphone-derived audio level via the audio.level bridge — no raw audio is exposed to the add-on.",
   "entry": "index.html",
   "license": "Apache-2.0",
   "network": false,
-  "permissions": ["peer.send", "peer.receive", "file.read.user_selected", "ui.panel"],
-  "capabilities": ["file-drop-v1"]
+  "permissions": ["audio.level", "ui.panel"],
+  "capabilities": ["voice-meter-v1"]
 }
 ```
 
-```ts
-const addon = await createAddon({ id: "com.example.file-drop", version: "0.1.0" });
+```js
+const meter = document.querySelector('[data-testid="meter-value"]');
+const speaking = document.querySelector('[data-testid="meter-speaking"]');
 
-dropZone.addEventListener("drop", async (e) => {
-  const file = await addon.files.pickDropped(e);
-  await addon.peer.sendFile(file);
+senn.audio.subscribeLevel((level) => {
+  meter.textContent = level.toFixed(3);
+  speaking.textContent = level > 0.05 ? "yes" : "no";
 });
 
-addon.peer.onFile(async (incoming) => {
-  if (await addon.ui.confirm(`Save ${incoming.name}?`)) {
-    await addon.files.save(incoming);
-  }
-});
+senn.ready();
 ```
 
-Conformance notes: file metadata flows through Core; the add-on never
-touches `RTCDataChannel` directly. Save dialogs MUST be user-driven.
+The host runs `getUserMedia` + an `AnalyserNode`, computes RMS, and
+delivers it through `audio.level`. The add-on never holds a
+`MediaStream`.
 
 ---
 
-## Local Profile
+## Voice Call
 
 ```json
 {
-  "id": "com.example.local-profile",
-  "name": "Local Profile",
+  "id": "com.example.voice-call",
+  "name": "Voice Call",
   "version": "0.1.0",
+  "description": "Reference 1:1 voice call via the media.* bridge; the addon never sees raw audio (ADR-0015).",
   "entry": "index.html",
   "license": "Apache-2.0",
   "network": false,
-  "permissions": ["peer.send", "peer.receive", "storage.local.write", "ui.panel"],
-  "capabilities": ["local-profile-v1"]
+  "permissions": ["media.send.audio", "media.receive.audio", "ui.panel"],
+  "capabilities": ["voice-call-v1"]
 }
 ```
 
-```ts
-const addon = await createAddon({ id: "com.example.local-profile", version: "0.1.0" });
-
-const profile = (await addon.storage.get("profile")) ?? { name: "anon", color: "#888" };
-
-addon.peer.on("local-profile-v1", (msg) => {
-  if (msg.type === "hello") render(msg.from, msg.payload);
+```js
+senn.media.onTrack(({ direction, track, state }) => {
+  // direction: "local" | "remote", track: "audio" | "video", state: "added" | "removed"
+  setUiState(direction, track, state);
 });
 
-addon.peer.send({ type: "hello", payload: profile });
+btnStart.addEventListener("click", () => senn.media.startLocalAudio());
+btnStop.addEventListener("click", () => senn.media.stopLocalAudio());
+btnListen.addEventListener("click", () => senn.media.subscribeRemoteAudio());
+btnMute.addEventListener("click", () => senn.media.unsubscribeRemoteAudio());
+
+senn.on("error", (err) => log(`error: ${err.code ?? ""} ${err.message}`));
+
+senn.ready();
 ```
+
+ADR-0015 contract: the add-on **asks** the host to start / stop
+sending or receiving; the host owns `getUserMedia` and the
+`<audio>` / `<video>` element where the remote track lands. The
+host MUST stop the underlying `MediaStreamTrack` on stop / close so
+the OS mic indicator flips off — that's a privacy MUST verified by
+the addon-runtime regression tests.
 
 ---
 
@@ -199,6 +247,7 @@ addon.peer.send({ type: "hello", payload: profile });
   "id": "com.example.copointer",
   "name": "Co-pointer",
   "version": "0.1.0",
+  "description": "Throttled pointer presence overlay.",
   "entry": "index.html",
   "license": "Apache-2.0",
   "network": false,
@@ -207,19 +256,21 @@ addon.peer.send({ type: "hello", payload: profile });
 }
 ```
 
-```ts
-const addon = await createAddon({ id: "com.example.copointer", version: "0.1.0" });
-
+```js
 let last = 0;
 window.addEventListener("pointermove", (e) => {
   const now = performance.now();
   if (now - last < 16) return;            // ~60 Hz cap
   last = now;
-  addon.peer.send({ type: "pointer", payload: { x: e.clientX, y: e.clientY } });
+  senn.peer.send({ type: "pointer", x: e.clientX, y: e.clientY });
 });
 
-addon.peer.on("copointer-v1", (msg) => moveGhost(msg.from, msg.payload));
+senn.on("deliver", ({ payload, from }) => {
+  if (payload?.type === "pointer") moveGhost(from, payload);
+});
+
+senn.ready();
 ```
 
-Conformance notes: throttle. Pointer streams flooded into Core will hit
-rate limits and degrade other add-ons in the same room.
+Throttle. Pointer streams flooded into Core will hit the per-add-on
+rate limit and degrade other add-ons in the same room.

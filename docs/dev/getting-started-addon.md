@@ -127,10 +127,19 @@ senn.ready().then((ctx) => {
 ```
 
 That's the entire bridge surface you need for a peer-to-peer add-on.
-Storage, binary transfer, and microphone level are also one call
-away (`senn.storage.put / get`, `senn.peer.sendBinary`,
-`senn.audio.subscribeLevel`) — see
-[`addon-sdk-spec.md`](../addon-sdk-spec.md).
+Other one-call surfaces — declare the matching permission first:
+
+- `senn.storage.{get,put,delete,list,clear}` — namespaced local-first storage
+- `senn.peer.sendBinary({ mime, bytes })` + `senn.on("deliver-bin", …)` —
+  blobs up to 4 MiB per logical message (chunked transparently)
+- `senn.audio.subscribeLevel(level => …)` — speaking detection without raw audio
+- `senn.media.startLocalAudio()` / `subscribeRemoteAudio()` /
+  `onTrack(({direction, track, state}) => …)` (and video equivalents) —
+  ADR-0015 cross-peer audio + video; the addon never touches the
+  `MediaStreamTrack` itself
+
+Recipes live in [`addon-cookbook.md`](addon-cookbook.md);
+[`addon-sdk-spec.md`](../addon-sdk-spec.md) is the normative shape.
 
 ## 4. What you must not do
 
@@ -226,6 +235,22 @@ const host = await AddonHost.load({
 The host is now enforcing your trust root for *your* addon. SENN
 itself is uninvolved — there is no central registry to register
 with.
+
+### Hand-off from a gallery (ADR-0016)
+
+If you maintain a discovery surface — your own page or the SENN
+[`addon-gallery`](../../apps/addon-gallery/) — emit deep-link URLs of
+the form
+
+```
+<host_origin>/?addon=<your-manifest-url>&publisher=<your-registry-url>
+```
+
+A SENN host (`apps/web` is the reference one) picks these up, fetches
+your registry, displays your publisher name + key fingerprint to the
+user, and only loads the addon under your trust root after a one-click
+confirmation. ADR-0016 §4 is the contract; do not skip the publisher
+parameter — hosts MUST refuse a hand-off without it.
 
 ## 8. Optional: ship a registry
 
