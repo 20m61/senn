@@ -239,6 +239,10 @@ document
   .querySelector<HTMLButtonElement>("#btn-load-presence")
   ?.addEventListener("click", () => loadAddonByManifest("/addons/avatar-presence/manifest.json"));
 
+document
+  .querySelector<HTMLButtonElement>("#btn-load-vault")
+  ?.addEventListener("click", () => loadAddonByManifest("/addons/local-vault/manifest.json"));
+
 // ── E2E test hook (no-op in production) ─────────────────────────────────────
 //
 // The signing e2e creates an Ed25519 keypair, signs the echo manifest in the

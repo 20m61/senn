@@ -58,6 +58,7 @@ bottom of each page before declaring your work done.
 | [/docs/addon-runtime-spec.md](../addon-runtime-spec.md) | core devs, add-on devs, AI coders | normative |
 | [/docs/addon-storage-spec.md](../addon-storage-spec.md) | core devs, add-on devs, AI coders | normative |
 | [/docs/addon-signing-spec.md](../addon-signing-spec.md) | core devs, registry ops, AI coders | normative |
+| [/docs/addon-file-transfer-spec.md](../addon-file-transfer-spec.md) | core devs, add-on devs, AI coders | normative |
 | [/docs/security-model.md](../security-model.md) | everyone | normative |
 | [/docs/license-policy.md](../license-policy.md) | dependency reviewers | normative |
 | [/docs/adr/](../adr/) | maintainers | source of decisions |

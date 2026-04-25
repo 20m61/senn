@@ -1,0 +1,78 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0.75rem;
+  line-height: 1.4;
+  font-size: 0.9rem;
+}
+
+h1 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+
+h2 {
+  font-size: 0.9rem;
+  margin: 0.75rem 0 0.25rem;
+}
+
+#state {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.muted {
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.status {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  min-height: 1.2em;
+  margin: 0.25rem 0;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px dashed #ddd;
+  font-size: 0.85rem;
+}
+
+.list li.empty {
+  display: block;
+  color: #888;
+  font-style: italic;
+}
+
+.name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  color: #666;
+  font-size: 0.75rem;
+}
+
+.list button {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+}

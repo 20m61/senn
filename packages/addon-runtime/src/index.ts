@@ -327,6 +327,12 @@ export class AddonHost {
   private mount(): void {
     const iframe = document.createElement("iframe");
     iframe.sandbox.add("allow-scripts");
+    // Browsers gate Blob URL downloads in sandboxed iframes behind
+    // `allow-downloads`. Grant it only when the manifest declares
+    // file.write.user_approved (per docs/addon-file-transfer-spec.md).
+    if (this.manifest.permissions.includes("file.write.user_approved")) {
+      iframe.sandbox.add("allow-downloads");
+    }
     iframe.referrerPolicy = "no-referrer";
     iframe.title = `SENN add-on: ${this.manifest.name}`;
     iframe.src = this.entryUrl.toString();
