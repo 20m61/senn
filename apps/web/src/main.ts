@@ -195,24 +195,24 @@ let addonHost: AddonHost | null = null;
 const addonStateLabel = document.querySelector<HTMLSpanElement>("#addon-state");
 const addonMount = document.querySelector<HTMLElement>("#addon-mount");
 
-async function loadAddonByManifest(manifestUrl: string): Promise<void> {
-  if (addonHost) return;
+async function loadAddonByManifest(
+  manifestUrl: string,
+  verify?: { mode: "required"; trustedKeys: ReadonlySet<string> },
+): Promise<void> {
+  if (addonHost) {
+    await addonHost.close();
+    addonHost = null;
+  }
   if (!addonMount) return;
   try {
-    const host = await AddonHost.load(
-      session
-        ? {
-            manifestUrl,
-            container: addonMount,
-            session,
-            storage: addonStorageBackend,
-          }
-        : {
-            manifestUrl,
-            container: addonMount,
-            storage: addonStorageBackend,
-          },
-    );
+    const opts = {
+      manifestUrl,
+      container: addonMount,
+      storage: addonStorageBackend,
+      ...(session ? { session } : {}),
+      ...(verify ? { verify } : {}),
+    };
+    const host = await AddonHost.load(opts);
     addonHost = host;
     if (addonStateLabel) addonStateLabel.textContent = host.state;
     host.on("state", (s) => {
@@ -242,6 +242,87 @@ document
 document
   .querySelector<HTMLButtonElement>("#btn-load-vault")
   ?.addEventListener("click", () => loadAddonByManifest("/addons/local-vault/manifest.json"));
+
+interface RegistryAddonV1 {
+  readonly id: string;
+  readonly name: string;
+  readonly version: string;
+  readonly description: string;
+  readonly path: string;
+  readonly capabilities: readonly string[];
+}
+interface RegistryV1 {
+  readonly v: 1;
+  readonly publisher: { readonly name: string };
+  readonly trustedKeys: readonly string[];
+  readonly addons: readonly RegistryAddonV1[];
+}
+
+function registryPathToUrl(path: string): string | null {
+  // The registry stores repo-relative paths; the web app only serves
+  // addons under apps/web/public/. Other paths (e.g. examples/) are not
+  // mountable from this origin and are skipped in the launcher.
+  const prefix = "apps/web/public/";
+  if (!path.startsWith(prefix)) return null;
+  return `/${path.slice(prefix.length)}/manifest.json`;
+}
+
+async function renderOfficialRegistry(): Promise<void> {
+  const statusEl = document.querySelector<HTMLElement>("#registry-status");
+  const listEl = document.querySelector<HTMLUListElement>("#registry-list");
+  if (!statusEl || !listEl) return;
+  statusEl.textContent = "loading…";
+  listEl.replaceChildren();
+  let registry: RegistryV1;
+  try {
+    const res = await fetch("/registry/official/index.json");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    registry = (await res.json()) as RegistryV1;
+  } catch (err) {
+    statusEl.textContent = `registry unavailable — ${(err as Error).message}`;
+    return;
+  }
+  const trustedKeys = new Set(registry.trustedKeys);
+  statusEl.textContent = `publisher ${registry.publisher.name} · ${registry.addons.length} addons · ${trustedKeys.size} trusted key(s)`;
+  for (const addon of registry.addons) {
+    const url = registryPathToUrl(addon.path);
+    const li = document.createElement("li");
+    li.dataset.addonId = addon.id;
+    const head = document.createElement("div");
+    head.className = "row";
+    const name = document.createElement("strong");
+    name.textContent = `${addon.name} v${addon.version}`;
+    const idEl = document.createElement("span");
+    idEl.className = "muted mono";
+    idEl.textContent = addon.id;
+    head.append(name, idEl);
+    const desc = document.createElement("p");
+    desc.className = "muted";
+    desc.textContent = addon.description;
+    const capRow = document.createElement("p");
+    capRow.className = "muted mono";
+    capRow.textContent = `capabilities: ${addon.capabilities.join(", ")}`;
+    li.append(head, desc, capRow);
+    if (url) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = "load (verify=required)";
+      btn.dataset.testid = `registry-load-${addon.id}`;
+      btn.addEventListener("click", () =>
+        loadAddonByManifest(url, { mode: "required", trustedKeys }),
+      );
+      li.append(btn);
+    } else {
+      const note = document.createElement("p");
+      note.className = "muted";
+      note.textContent = "(not mounted under apps/web/public — skipped)";
+      li.append(note);
+    }
+    listEl.append(li);
+  }
+}
+
+void renderOfficialRegistry();
 
 // ── E2E test hook (no-op in production) ─────────────────────────────────────
 //

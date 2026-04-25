@@ -60,6 +60,15 @@ jobs:
             exit 1
           fi
 
+      - name: Verify shipped web registry is up to date
+        run: |
+          pnpm build:web-registry
+          if [ -n "$(git status --porcelain apps/web/public/registry)" ]; then
+            echo "::error::apps/web/public/registry/official/index.json is stale; run 'pnpm build:web-registry' and commit"
+            git --no-pager diff -- apps/web/public/registry
+            exit 1
+          fi
+
       - name: Validate invite fixture
         run: pnpm validate:invite examples/invite-roundtrip/payload.json
 

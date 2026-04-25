@@ -66,13 +66,13 @@
       </section>
 
       <section class="demo">
-        <h2>Echo add-on (sandboxed iframe)</h2>
+        <h2>Add-ons (sandboxed iframe)</h2>
         <p class="muted">
-          Once the data channel is <code>connected</code>, click
-          <strong>load echo add-on</strong>. The add-on runs in a
-          <code>sandbox="allow-scripts"</code> iframe and reaches Core only through the
-          postMessage bridge. Anything it sends is wrapped in an <code>addon.message</code>
-          envelope and forwarded over <code>core.text</code> to the peer's instance.
+          Once the data channel is <code>connected</code>, pick an add-on below. Add-ons run in a
+          <code>sandbox="allow-scripts"</code> iframe and reach Core only through the postMessage
+          bridge. The launcher reads the official trust root
+          (<code>addons/official/index.json</code>) and loads each entry with
+          <code>verify: required</code> against its <code>trustedKeys</code>.
         </p>
         <div class="row">
           <button id="btn-load-addon">load echo add-on</button>
@@ -81,6 +81,16 @@
           <button id="btn-load-vault">load local-vault add-on</button>
           <span class="muted">addon state: <span id="addon-state" class="mono">none</span></span>
         </div>
+
+        <h3>Official registry</h3>
+        <p class="muted">
+          Loaded from <code>/registry/official/index.json</code>. Each row enforces
+          <code>verify: required</code> against the publisher's pinned key(s); a tampered
+          manifest or an unsigned addon would fail to load.
+        </p>
+        <div id="registry-status" class="muted mono"></div>
+        <ul id="registry-list" class="list"></ul>
+
         <div id="addon-mount" class="addon-mount"></div>
       </section>
     </main>

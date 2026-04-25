@@ -1,0 +1,50 @@
+{
+  "v": 1,
+  "publisher": {
+    "name": "SENN Project",
+    "homepage": "https://github.com/20m61/senn"
+  },
+  "trustedKeys": ["RefyZUlMPbQgj8cdXqFOIofvBeuXmKZcBUpJ9mayybQ"],
+  "addons": [
+    {
+      "id": "dev.senn.echo",
+      "name": "Echo",
+      "version": "0.1.0",
+      "description": "Echoes any payload it receives, prefixed with 'echo:'.",
+      "path": "apps/web/public/addons/echo",
+      "capabilities": ["echo-v1"]
+    },
+    {
+      "id": "dev.senn.whiteboard",
+      "name": "Whiteboard",
+      "version": "0.1.0",
+      "description": "Shared whiteboard. Strokes flow P2P; the canvas snapshot is local-first.",
+      "path": "apps/web/public/addons/whiteboard",
+      "capabilities": ["whiteboard-v1"]
+    },
+    {
+      "id": "dev.senn.avatar-presence",
+      "name": "Avatar Presence",
+      "version": "0.1.0",
+      "description": "Lightweight presence (speaking, emotion, reactions). No video — state only.",
+      "path": "apps/web/public/addons/avatar-presence",
+      "capabilities": ["avatar-presence-v1"]
+    },
+    {
+      "id": "dev.senn.local-vault",
+      "name": "Local Vault",
+      "version": "0.1.0",
+      "description": "Stores user-selected files in local-first storage and downloads them again on demand. No network.",
+      "path": "apps/web/public/addons/local-vault",
+      "capabilities": ["local-vault-v1"]
+    },
+    {
+      "id": "dev.senn.minimal",
+      "name": "Minimal Add-on",
+      "version": "0.0.1",
+      "description": "Smallest possible SENN add-on, used as a template and for runtime tests.",
+      "path": "examples/minimal-addon",
+      "capabilities": ["minimal-v1"]
+    }
+  ]
+}
