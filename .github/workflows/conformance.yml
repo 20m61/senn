@@ -140,3 +140,63 @@ jobs:
           name: playwright-report-${{ matrix.browser }}
           path: apps/web/playwright-report
           retention-days: 7
+
+  gallery-e2e:
+    name: Playwright gallery (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: static
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve Playwright version
+        id: pw
+        run: |
+          version=$(node -p "require('./apps/addon-gallery/node_modules/@playwright/test/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.browser }}
+
+      - name: Install Playwright browser (with system deps)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @senn/addon-gallery exec playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @senn/addon-gallery exec playwright install-deps ${{ matrix.browser }}
+
+      - name: Run gallery e2e
+        run: pnpm --filter @senn/addon-gallery exec playwright test --project=${{ matrix.browser }}
+        env:
+          CI: "1"
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-gallery-${{ matrix.browser }}
+          path: apps/addon-gallery/playwright-report
+          retention-days: 7
