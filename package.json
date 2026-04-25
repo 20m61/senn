@@ -28,7 +28,8 @@
     "check:addon-forbidden": "tsx scripts/check-addon-forbidden-apis.ts",
     "check:licenses": "tsx scripts/check-licenses.ts",
     "sign:manifest": "tsx scripts/sign-manifest.ts",
-    "verify:manifest": "tsx scripts/verify-manifest.ts"
+    "verify:manifest": "tsx scripts/verify-manifest.ts",
+    "verify:official": "tsx scripts/verify-official-addons.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",

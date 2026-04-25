@@ -258,6 +258,13 @@ declare global {
         mode: "none" | "optional" | "required";
         trustedKeys?: string[];
       }) => Promise<{ ok: boolean; error?: string }>;
+      loadShipped: (
+        manifestUrl: string,
+        verify: {
+          mode: "none" | "optional" | "required";
+          trustedKeys?: string[];
+        },
+      ) => Promise<{ ok: boolean; error?: string }>;
     };
   }
 }
@@ -328,6 +335,35 @@ declare global {
       try {
         const opts = {
           manifestUrl: "/addons/echo/manifest.json",
+          container: addonMount,
+          storage: addonStorageBackend,
+          verify: {
+            mode: verify.mode,
+            ...(verify.trustedKeys
+              ? { trustedKeys: new Set(verify.trustedKeys) as ReadonlySet<string> }
+              : {}),
+          },
+        } as const;
+        const host = await AddonHost.load(opts);
+        addonHost = host;
+        if (addonStateLabel) addonStateLabel.textContent = host.state;
+        host.on("state", (s) => {
+          if (addonStateLabel) addonStateLabel.textContent = s;
+        });
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: (err as Error).message };
+      }
+    },
+    async loadShipped(manifestUrl, verify) {
+      if (addonHost) {
+        await addonHost.close();
+        addonHost = null;
+      }
+      if (!addonMount) return { ok: false, error: "no mount" };
+      try {
+        const opts = {
+          manifestUrl,
           container: addonMount,
           storage: addonStorageBackend,
           verify: {

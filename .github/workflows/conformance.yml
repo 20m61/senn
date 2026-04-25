@@ -48,6 +48,9 @@ jobs:
       - name: Forbidden-API grep on add-ons
         run: pnpm check:addon-forbidden
 
+      - name: Verify official add-on registry signatures
+        run: pnpm verify:official
+
       - name: Validate invite fixture
         run: pnpm validate:invite examples/invite-roundtrip/payload.json
 

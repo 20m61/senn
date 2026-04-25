@@ -35,7 +35,8 @@ pnpm validate:invite examples/invite-roundtrip/payload.json
 | Storage backend tests | `pnpm --filter @senn/storage test` (in-memory backend: namespacing, quota, length, close, types) |
 | Manifest signing tests | `pnpm --filter @senn/manifest test` (Ed25519 sign/verify round-trip, tampered manifest, untrusted key, schema rejections, keystore PKCS#8 round-trip) |
 | Signing CLI | `pnpm sign:manifest <dir> --generate-key <ks.json>` then `pnpm verify:manifest <dir>` — both exit 0; tampering causes verify to exit non-zero |
-| Browser e2e | `pnpm --filter @senn/web e2e` (Playwright Chromium; RTCPeerConnection handoff + text + tampered URL + echo add-on round-trip + add-on storage persist/reload + namespace + whiteboard P2P stroke + whiteboard snapshot + avatar-presence state-only + manifest signing verify modes + local-vault file pick/save/persist) |
+| Official registry | `pnpm verify:official` — every add-on listed in `addons/official/index.json` has a `manifest.sig.json` whose key is in `trustedKeys` and whose bytes match the served `manifest.json` |
+| Browser e2e | `pnpm --filter @senn/web e2e` (Playwright Chromium; RTCPeerConnection handoff + text + tampered URL + echo add-on round-trip + add-on storage persist/reload + namespace + whiteboard P2P stroke + whiteboard snapshot + avatar-presence state-only + manifest signing verify modes + local-vault file pick/save/persist + shipped echo verify=required against official trustedKeys) |
 
 When the spec intentionally changes, regenerate the fixture with
 `pnpm validate:invite <payload> --update` and include both the payload and
@@ -80,15 +81,15 @@ When editing `docs/`:
 
 ## CI
 
-CI does not yet exist in the repo. When it lands, it MUST:
+CI runs in `.github/workflows/conformance.yml` on push and PR to
+`develop` and `main`. Two jobs:
 
-1. Run `pnpm install --frozen-lockfile`.
-2. Run `pnpm typecheck` and `pnpm lint`.
-3. Run `pnpm validate:all-manifests` (covers `addons/` + `examples/`).
-4. Run `pnpm validate:invite` and `pnpm validate:bundle` against the
-   committed fixtures.
-5. Run `pnpm test` (vitest) and `pnpm --filter @senn/web e2e` (Playwright).
-6. Run the forbidden-API grep against every add-on directory.
+1. **static** — `pnpm install --frozen-lockfile`, `pnpm typecheck`,
+   `pnpm lint`, `pnpm validate:all-manifests`,
+   `pnpm check:addon-forbidden`, `pnpm verify:official`,
+   `pnpm validate:invite` + `pnpm validate:bundle` against committed
+   fixtures, `pnpm test` (vitest), and `pnpm --filter @senn/web build`.
+2. **e2e** — `pnpm --filter @senn/web e2e` (Playwright Chromium, browsers cached).
 
-Until CI exists, contributors are responsible for running these locally.
-PRs without conformance evidence will be sent back.
+Contributors should still run the same checks locally before opening
+a PR. PRs without conformance evidence will be sent back.
