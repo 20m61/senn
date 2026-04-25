@@ -1,0 +1,50 @@
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  padding: 1rem;
+  background: canvas;
+  color: canvastext;
+}
+
+main {
+  max-width: 32rem;
+}
+
+h1 {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem;
+  letter-spacing: 0.04em;
+}
+
+.muted {
+  opacity: 0.7;
+  font-size: 0.85rem;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+
+.meter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.meter {
+  flex: 1;
+  height: 0.9rem;
+  border-radius: 0.45rem;
+  background: color-mix(in oklab, canvastext 12%, transparent);
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, canvastext 18%, transparent);
+}
+
+.meter-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #2ea043 0%, #d6a800 70%, #d93737 100%);
+  transition: width 80ms linear;
+}

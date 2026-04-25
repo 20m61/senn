@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'none'; frame-ancestors 'self'"
+    />
+    <title>Voice Meter Add-on</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Voice Meter</h1>
+      <p>state: <span id="state">booting</span></p>
+      <p class="muted">
+        Subscribed to <code>audio.level</code>. The add-on never sees raw audio — only the
+        scalar energy value the host computes from the user's microphone.
+      </p>
+      <div class="meter-row">
+        <div class="meter" aria-label="audio level">
+          <div id="meter-fill" class="meter-fill" data-testid="meter-fill"></div>
+        </div>
+        <span id="meter-value" class="mono" data-testid="meter-value">0.000</span>
+      </div>
+      <p class="muted">
+        speaking: <span id="speaking" class="mono" data-testid="meter-speaking">no</span>
+      </p>
+    </main>
+    <script src="senn-addon-sdk.js"></script>
+    <script src="addon.js"></script>
+  </body>
+</html>

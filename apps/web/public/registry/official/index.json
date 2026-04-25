@@ -34,9 +34,17 @@
       "id": "dev.senn.local-vault",
       "name": "Local Vault",
       "version": "0.1.0",
-      "description": "Stores user-selected files in local-first storage and downloads them again on demand. No network.",
+      "description": "Stores user-selected files locally and ships them P2P (≤ 4 MiB chunked) to the connected peer.",
       "path": "apps/web/public/addons/local-vault",
       "capabilities": ["local-vault-v1"]
+    },
+    {
+      "id": "dev.senn.voice-meter",
+      "name": "Voice Meter",
+      "version": "0.1.0",
+      "description": "Visualises microphone-derived audio level via the audio.level bridge — no raw audio is exposed to the add-on.",
+      "path": "apps/web/public/addons/voice-meter",
+      "capabilities": ["voice-meter-v1"]
     },
     {
       "id": "dev.senn.minimal",

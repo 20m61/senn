@@ -411,6 +411,95 @@ document
   .querySelector<HTMLButtonElement>("#btn-load-vault")
   ?.addEventListener("click", () => loadAddonByManifest("/addons/local-vault/manifest.json"));
 
+document
+  .querySelector<HTMLButtonElement>("#btn-load-meter")
+  ?.addEventListener("click", () => loadAddonByManifest("/addons/voice-meter/manifest.json"));
+
+// ── Audio level capture (host side of docs/addon-audio-level-spec.md) ──────
+//
+// AudioContext + AnalyserNode → RMS → addonHost.publishAudioLevel at ~20 Hz.
+// The raw MediaStream stays on the host. The add-on iframe receives only
+// the [0,1] scalar — there is no path from inside the iframe back to the
+// stream.
+
+interface AudioCapturePipeline {
+  stop(): Promise<void>;
+}
+
+let micPipeline: AudioCapturePipeline | null = null;
+const micStatusEl = document.querySelector<HTMLElement>("#mic-status");
+const micToggleBtn = document.querySelector<HTMLButtonElement>("#btn-mic-toggle");
+
+function setMicStatus(text: string): void {
+  if (micStatusEl) micStatusEl.textContent = text;
+}
+
+async function startAudioCapture(): Promise<AudioCapturePipeline> {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  const audioCtx = new (
+    globalThis.AudioContext ||
+    (globalThis as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  )();
+  const source = audioCtx.createMediaStreamSource(stream);
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.4;
+  source.connect(analyser);
+
+  const buf = new Uint8Array(analyser.fftSize);
+  let stopped = false;
+  const tick = () => {
+    if (stopped) return;
+    analyser.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = (buf[i] ?? 128) / 128 - 1; // [-1, 1]
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / buf.length);
+    // Scale RMS into a more readable [0,1] range — speech RMS sits around 0.05–0.3
+    // in practice; multiply by ~3 and clamp so the meter actually moves.
+    const level = Math.min(1, rms * 3);
+    addonHost?.publishAudioLevel(level);
+  };
+  const timer = setInterval(tick, 50); // ~20 Hz, well under the 30 Hz cap
+
+  return {
+    async stop() {
+      stopped = true;
+      clearInterval(timer);
+      try {
+        source.disconnect();
+      } catch {
+        /* idempotent */
+      }
+      for (const track of stream.getTracks()) track.stop();
+      try {
+        await audioCtx.close();
+      } catch {
+        /* idempotent */
+      }
+    },
+  };
+}
+
+micToggleBtn?.addEventListener("click", async () => {
+  if (micPipeline) {
+    await micPipeline.stop();
+    micPipeline = null;
+    setMicStatus("mic: off");
+    if (micToggleBtn) micToggleBtn.textContent = "enable mic for audio.level";
+    return;
+  }
+  try {
+    micPipeline = await startAudioCapture();
+    setMicStatus("mic: on (publishing levels to active addon)");
+    if (micToggleBtn) micToggleBtn.textContent = "disable mic";
+  } catch (err) {
+    setMicStatus(`mic: error — ${(err as Error).message}`);
+  }
+});
+
 interface RegistryAddonV1 {
   readonly id: string;
   readonly name: string;
@@ -514,6 +603,7 @@ declare global {
           trustedKeys?: string[];
         },
       ) => Promise<{ ok: boolean; error?: string }>;
+      publishAudioLevel: (level: number) => boolean;
     };
   }
 }
@@ -632,6 +722,11 @@ declare global {
       } catch (err) {
         return { ok: false, error: (err as Error).message };
       }
+    },
+    publishAudioLevel(level) {
+      if (!addonHost) return false;
+      addonHost.publishAudioLevel(level);
+      return true;
     },
   };
 }
