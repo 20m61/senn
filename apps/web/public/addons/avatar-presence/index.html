@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'none'; frame-ancestors 'self'"
+    />
+    <title>Avatar Presence Add-on</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Avatar Presence</h1>
+      <p>state: <span id="state">booting</span></p>
+      <section class="avatars">
+        <div class="avatar" id="me-avatar" data-role="me">
+          <div class="dot" id="me-dot"></div>
+          <p class="who">me</p>
+          <p class="meta">
+            speaking: <span id="me-speaking">no</span> · emotion: <span id="me-emotion">neutral</span>
+          </p>
+          <p class="reaction" id="me-reaction" aria-live="polite"></p>
+        </div>
+        <div class="avatar" id="peer-avatar" data-role="peer">
+          <div class="dot" id="peer-dot"></div>
+          <p class="who">peer</p>
+          <p class="meta">
+            speaking: <span id="peer-speaking">no</span> · emotion: <span id="peer-emotion">neutral</span>
+          </p>
+          <p class="reaction" id="peer-reaction" aria-live="polite"></p>
+        </div>
+      </section>
+      <section class="controls">
+        <button id="btn-toggle-speaking" type="button">toggle speaking</button>
+        <label>
+          emotion:
+          <select id="emotion-select">
+            <option value="neutral">neutral</option>
+            <option value="happy">happy</option>
+            <option value="thinking">thinking</option>
+            <option value="surprised">surprised</option>
+          </select>
+        </label>
+        <span class="reactions">
+          react:
+          <button class="rxn" type="button" data-emoji="👍">👍</button>
+          <button class="rxn" type="button" data-emoji="❤️">❤️</button>
+          <button class="rxn" type="button" data-emoji="🎉">🎉</button>
+        </span>
+      </section>
+    </main>
+    <script src="addon.js"></script>
+  </body>
+</html>

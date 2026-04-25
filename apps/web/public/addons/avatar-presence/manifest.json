@@ -1,0 +1,12 @@
+{
+  "id": "dev.senn.avatar-presence",
+  "name": "Avatar Presence",
+  "version": "0.1.0",
+  "description": "Lightweight presence (speaking, emotion, reactions). No video — state only.",
+  "entry": "index.html",
+  "license": "Apache-2.0",
+  "author": "SENN Project",
+  "network": false,
+  "permissions": ["peer.send", "peer.receive", "ui.overlay"],
+  "capabilities": ["avatar-presence-v1"]
+}

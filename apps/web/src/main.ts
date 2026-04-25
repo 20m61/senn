@@ -235,6 +235,10 @@ document
   .querySelector<HTMLButtonElement>("#btn-load-whiteboard")
   ?.addEventListener("click", () => loadAddonByManifest("/addons/whiteboard/manifest.json"));
 
+document
+  .querySelector<HTMLButtonElement>("#btn-load-presence")
+  ?.addEventListener("click", () => loadAddonByManifest("/addons/avatar-presence/manifest.json"));
+
 // ── E2E test hook (no-op in production) ─────────────────────────────────────
 //
 // The signing e2e creates an Ed25519 keypair, signs the echo manifest in the

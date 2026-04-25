@@ -1,0 +1,92 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0.75rem;
+  line-height: 1.4;
+  font-size: 0.9rem;
+}
+
+h1 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+
+#state {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.avatars {
+  display: flex;
+  gap: 1rem;
+  margin: 0.5rem 0;
+}
+
+.avatar {
+  border: 1px solid #ddd;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  flex: 1;
+  text-align: center;
+  background: #fafafa;
+}
+
+.dot {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: #ccc;
+  position: relative;
+  transition: box-shadow 0.15s, background 0.15s;
+}
+
+.dot[data-speaking="1"] {
+  box-shadow: 0 0 0 4px rgba(26, 115, 232, 0.5);
+}
+
+.dot[data-emotion="happy"] {
+  background: #f9c74f;
+}
+.dot[data-emotion="thinking"] {
+  background: #90be6d;
+}
+.dot[data-emotion="surprised"] {
+  background: #f3722c;
+}
+
+.who {
+  margin: 0.25rem 0 0;
+  font-weight: 600;
+}
+
+.meta {
+  margin: 0.25rem 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  color: #555;
+}
+
+.reaction {
+  margin: 0.25rem 0;
+  height: 1.4em;
+  font-size: 1.5rem;
+}
+
+.controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.controls button,
+.controls select {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.rxn {
+  font-size: 1rem;
+  padding: 0.2rem 0.4rem;
+  margin-left: 0.25rem;
+}

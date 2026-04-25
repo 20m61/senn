@@ -34,7 +34,7 @@ pnpm validate:invite examples/invite-roundtrip/payload.json
 | Adapter contract tests (HTTP poll) | `pnpm --filter @senn/signaling-http-poll test` (mock + real Node reference server: round-trip, dedup, 4xx surfacing, no vendor lock-in) |
 | Storage backend tests | `pnpm --filter @senn/storage test` (in-memory backend: namespacing, quota, length, close, types) |
 | Manifest signing tests | `pnpm --filter @senn/manifest test` (Ed25519 sign/verify round-trip, tampered manifest, untrusted key, schema rejections) |
-| Browser e2e | `pnpm --filter @senn/web e2e` (Playwright Chromium; RTCPeerConnection handoff + text + tampered URL + echo add-on round-trip + add-on storage persist/reload + namespace + whiteboard P2P stroke delivery + whiteboard snapshot persistence) |
+| Browser e2e | `pnpm --filter @senn/web e2e` (Playwright Chromium; RTCPeerConnection handoff + text + tampered URL + echo add-on round-trip + add-on storage persist/reload + namespace + whiteboard P2P stroke + whiteboard snapshot persistence + avatar-presence state-only delivery + manifest signing verify modes) |
 
 When the spec intentionally changes, regenerate the fixture with
 `pnpm validate:invite <payload> --update` and include both the payload and
