@@ -40,7 +40,8 @@ the regenerated `encoded.txt` / `url.txt` in the PR.
 ## Add-on level
 
 ```sh
-pnpm tsx scripts/validate-addon-manifest.ts <path-to-manifest.json>
+pnpm validate:addon <path-to-manifest.json>     # one manifest
+pnpm validate:all-manifests                     # walk addons/ + examples/
 ```
 
 | Check | Guards |
@@ -79,9 +80,11 @@ CI does not yet exist in the repo. When it lands, it MUST:
 
 1. Run `pnpm install --frozen-lockfile`.
 2. Run `pnpm typecheck` and `pnpm lint`.
-3. Run `pnpm validate:addon` against every manifest under `addons/` and
-   `examples/`.
-4. Run the forbidden-API grep against every add-on directory.
+3. Run `pnpm validate:all-manifests` (covers `addons/` + `examples/`).
+4. Run `pnpm validate:invite` and `pnpm validate:bundle` against the
+   committed fixtures.
+5. Run `pnpm test` (vitest) and `pnpm --filter @senn/web e2e` (Playwright).
+6. Run the forbidden-API grep against every add-on directory.
 
 Until CI exists, contributors are responsible for running these locally.
 PRs without conformance evidence will be sent back.
