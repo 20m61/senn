@@ -7,8 +7,24 @@ const stateEl = document.getElementById("state");
 const logEl = document.getElementById("log");
 const emitButton = document.getElementById("emit-button");
 const input = document.getElementById("emit-input");
+const vaultKey = document.getElementById("vault-key");
+const vaultValue = document.getElementById("vault-value");
+const vaultState = document.getElementById("vault-state");
+const vaultSave = document.getElementById("vault-save");
+const vaultLoad = document.getElementById("vault-load");
+const vaultList = document.getElementById("vault-list");
 
 let initialized = false;
+const pendingRpc = new Map();
+let nextRid = 0;
+
+function rpc(req) {
+  return new Promise((resolve, reject) => {
+    const rid = `r_${++nextRid}`;
+    pendingRpc.set(rid, { resolve, reject });
+    parent.postMessage({ kind: KIND, op: "storage", rid, ...req }, "*");
+  });
+}
 
 function log(text) {
   const li = document.createElement("li");
@@ -35,6 +51,39 @@ input.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") emitButton.click();
 });
 
+vaultSave?.addEventListener("click", async () => {
+  const k = vaultKey?.value?.trim();
+  const v = vaultValue?.value;
+  if (!k) return;
+  try {
+    await rpc({ storage: "put", key: k, value: v });
+    vaultState.textContent = `saved ${k}`;
+  } catch (err) {
+    vaultState.textContent = `error: ${err.message}`;
+  }
+});
+
+vaultLoad?.addEventListener("click", async () => {
+  const k = vaultKey?.value?.trim();
+  if (!k) return;
+  try {
+    const got = await rpc({ storage: "get", key: k });
+    vaultState.textContent = `loaded ${k}=${JSON.stringify(got)}`;
+    if (typeof got === "string") vaultValue.value = got;
+  } catch (err) {
+    vaultState.textContent = `error: ${err.message}`;
+  }
+});
+
+vaultList?.addEventListener("click", async () => {
+  try {
+    const keys = await rpc({ storage: "list" });
+    vaultState.textContent = `keys=${JSON.stringify(keys)}`;
+  } catch (err) {
+    vaultState.textContent = `error: ${err.message}`;
+  }
+});
+
 // Register the message listener BEFORE announcing ready, so we cannot miss
 // the host's init message regardless of arrival order.
 window.addEventListener("message", (ev) => {
@@ -53,6 +102,14 @@ window.addEventListener("message", (ev) => {
         send({ original: msg.payload, echoed: true, by: "echo-addon" });
       }
       break;
+    case "storage.result": {
+      const pending = pendingRpc.get(msg.rid);
+      if (!pending) return;
+      pendingRpc.delete(msg.rid);
+      if (msg.ok) pending.resolve(msg.value);
+      else pending.reject(new Error(msg.error));
+      break;
+    }
   }
 });
 

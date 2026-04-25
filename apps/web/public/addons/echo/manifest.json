@@ -7,6 +7,12 @@
   "license": "Apache-2.0",
   "author": "SENN Project",
   "network": false,
-  "permissions": ["peer.send", "peer.receive", "ui.panel"],
+  "permissions": [
+    "peer.send",
+    "peer.receive",
+    "storage.local.read",
+    "storage.local.write",
+    "ui.panel"
+  ],
   "capabilities": ["echo-v1"]
 }

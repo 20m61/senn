@@ -14,8 +14,10 @@ import {
   parseInviteBundleUrl,
 } from "@senn/protocol";
 import { UrlFragmentSignaling } from "@senn/signaling-url-fragment";
+import { IndexedDbStorageBackend } from "@senn/storage";
 
 const transport = new UrlFragmentSignaling();
+const addonStorageBackend = new IndexedDbStorageBackend();
 const me: PeerId = newPeerId();
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -205,10 +207,12 @@ document
               manifestUrl: "/addons/echo/manifest.json",
               container: addonMount,
               session,
+              storage: addonStorageBackend,
             }
           : {
               manifestUrl: "/addons/echo/manifest.json",
               container: addonMount,
+              storage: addonStorageBackend,
             },
       );
       addonHost = host;

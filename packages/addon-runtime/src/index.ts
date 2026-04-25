@@ -14,6 +14,12 @@ import {
   tryParseAddonEnvelope,
   validateAddonEnvelope,
 } from "@senn/protocol";
+import {
+  type AddonStorage,
+  type StorageBackend,
+  StorageError,
+  createAddonStorage,
+} from "@senn/storage";
 
 /**
  * Minimal duck-typed contract that AddonHost needs from a transport.
@@ -30,6 +36,8 @@ export const ADDON_BRIDGE_KIND = "senn.addon.v1" as const;
 
 export type AddonHostState = "created" | "mounted" | "initialized" | "active" | "closed";
 
+export type AddonStorageOp = "get" | "put" | "delete" | "list" | "clear";
+
 export type AddonBridgeMessage =
   | {
       kind: typeof ADDON_BRIDGE_KIND;
@@ -41,7 +49,29 @@ export type AddonBridgeMessage =
   | { kind: typeof ADDON_BRIDGE_KIND; op: "ready" }
   | { kind: typeof ADDON_BRIDGE_KIND; op: "send"; payload: unknown }
   | { kind: typeof ADDON_BRIDGE_KIND; op: "deliver"; payload: unknown; from?: string }
-  | { kind: typeof ADDON_BRIDGE_KIND; op: "error"; message: string };
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "error"; message: string }
+  | {
+      kind: typeof ADDON_BRIDGE_KIND;
+      op: "storage";
+      rid: string;
+      storage: AddonStorageOp;
+      key?: string;
+      value?: unknown;
+    }
+  | {
+      kind: typeof ADDON_BRIDGE_KIND;
+      op: "storage.result";
+      rid: string;
+      ok: true;
+      value: unknown;
+    }
+  | {
+      kind: typeof ADDON_BRIDGE_KIND;
+      op: "storage.result";
+      rid: string;
+      ok: false;
+      error: string;
+    };
 
 export interface AddonManifest {
   readonly id: string;
@@ -71,6 +101,8 @@ export interface AddonHostOptions {
   readonly manifestUrl: string;
   readonly container: HTMLElement;
   readonly session?: AddonPeerLink;
+  /** Optional storage backend; without it, storage ops respond with permission-denied. */
+  readonly storage?: StorageBackend;
   /** Override fetch (used by tests). */
   readonly fetcher?: typeof fetch;
 }
@@ -154,6 +186,7 @@ export class AddonHost {
 
   private readonly container: HTMLElement;
   private readonly session: AddonPeerLink | null;
+  private readonly storage: AddonStorage | null;
   private iframe: HTMLIFrameElement | null = null;
   private currentState: AddonHostState = "created";
   private detachPeer: (() => void) | null = null;
@@ -168,6 +201,7 @@ export class AddonHost {
     this.entryUrl = new URL(manifest.entry, manifestUrl);
     this.container = opts.container;
     this.session = opts.session ?? null;
+    this.storage = opts.storage ? createAddonStorage(manifest.id, opts.storage) : null;
     this.sessionId = newEnvelopeId();
     this.windowMessageHandler = (ev) => this.handleWindowMessage(ev);
   }
@@ -297,9 +331,93 @@ export class AddonHost {
       case "error":
         this.emit("error", new Error(`addon: ${msg.message}`));
         return;
-      default:
-        // init / deliver are host → iframe ops; ignore if echoed back.
+      case "storage":
+        void this.handleStorage(msg);
         return;
+      default:
+        // init / deliver / storage.result are host → iframe ops; ignore if echoed back.
+        return;
+    }
+  }
+
+  private storageReply(rid: string, value: unknown): void {
+    this.postToIframe({ kind: ADDON_BRIDGE_KIND, op: "storage.result", rid, ok: true, value });
+  }
+
+  private storageError(rid: string, error: string): void {
+    this.postToIframe({ kind: ADDON_BRIDGE_KIND, op: "storage.result", rid, ok: false, error });
+  }
+
+  private async handleStorage(msg: Extract<AddonBridgeMessage, { op: "storage" }>): Promise<void> {
+    const { rid, storage: subOp, key, value } = msg;
+    if (typeof rid !== "string" || rid.length === 0) return;
+    if (this.currentState === "closed") {
+      this.storageError(rid, "closed");
+      return;
+    }
+    if (!this.storage) {
+      this.storageError(rid, "permission-denied");
+      return;
+    }
+    const needsRead = subOp === "get" || subOp === "list";
+    const needsWrite = subOp === "put" || subOp === "delete" || subOp === "clear";
+    if (needsRead && !this.manifest.permissions.includes("storage.local.read")) {
+      this.storageError(rid, "permission-denied");
+      return;
+    }
+    if (needsWrite && !this.manifest.permissions.includes("storage.local.write")) {
+      this.storageError(rid, "permission-denied");
+      return;
+    }
+    try {
+      switch (subOp) {
+        case "get": {
+          if (typeof key !== "string") {
+            this.storageError(rid, "invalid-request");
+            return;
+          }
+          const got = await this.storage.get(key);
+          this.storageReply(rid, got);
+          return;
+        }
+        case "put": {
+          if (typeof key !== "string") {
+            this.storageError(rid, "invalid-request");
+            return;
+          }
+          await this.storage.put(key, value);
+          this.storageReply(rid, null);
+          return;
+        }
+        case "delete": {
+          if (typeof key !== "string") {
+            this.storageError(rid, "invalid-request");
+            return;
+          }
+          await this.storage.delete(key);
+          this.storageReply(rid, null);
+          return;
+        }
+        case "list": {
+          const keys = await this.storage.list();
+          this.storageReply(rid, keys);
+          return;
+        }
+        case "clear": {
+          await this.storage.clear();
+          this.storageReply(rid, null);
+          return;
+        }
+        default:
+          this.storageError(rid, "invalid-request");
+      }
+    } catch (err) {
+      if (err instanceof StorageError) {
+        this.storageError(rid, err.code);
+      } else {
+        this.storageError(rid, "invalid-request");
+        this.emit("error", err as Error);
+      }
     }
   }
 

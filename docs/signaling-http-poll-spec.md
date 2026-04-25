@@ -91,10 +91,17 @@ Response:
 
 ## Reference endpoints (informative)
 
-A reference PHP implementation that fits in ~40 lines using the
-filesystem as a TTL cache, and a Node implementation using an in-memory
-Map, will live under `examples/signaling-http-poll-server/`. They are
-optional; any compliant server works.
+Reference implementations live under
+[`examples/signaling-http-poll-server/`](../examples/signaling-http-poll-server/):
+
+- `php/signal.php` — filesystem-based TTL queue. Drops into a typical
+  shared rental host. ~50 lines.
+- `node/server.mjs` — single-file Node module using only Node 22+
+  standard library; in-memory Map with TTL. ~70 lines. Also imported
+  by the adapter's integration test to prove the wire contract
+  end-to-end.
+
+Either one is sufficient; any compliant server works.
 
 ## Wire example
 

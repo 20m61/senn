@@ -21,6 +21,14 @@
         <input id="emit-input" type="text" placeholder="payload to send" />
         <button id="emit-button" type="button">send</button>
       </div>
+      <div id="vault-row" class="emit">
+        <input id="vault-key" type="text" placeholder="key" />
+        <input id="vault-value" type="text" placeholder="value" />
+        <button id="vault-save" type="button">save</button>
+        <button id="vault-load" type="button">load</button>
+        <button id="vault-list" type="button">list</button>
+      </div>
+      <p>vault: <span id="vault-state">empty</span></p>
     </main>
     <!--
       Loaded as a classic script (no type="module"). A sandboxed iframe

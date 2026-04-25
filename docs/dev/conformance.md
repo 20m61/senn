@@ -31,8 +31,9 @@ pnpm validate:invite examples/invite-roundtrip/payload.json
 | Invite round-trip | `docs/room-and-invite-spec.md` (encode/decode, URL length, fragment key) |
 | Bundle round-trip | `docs/signaling-url-fragment-spec.md` (encode/decode, message schema) |
 | Adapter unit tests (URL fragment) | `pnpm --filter @senn/signaling-url-fragment test` (round-trip, isolation, close, negatives) |
-| Adapter contract tests (HTTP poll) | `pnpm --filter @senn/signaling-http-poll test` (round-trip, dedup, server errors, no vendor lock-in) |
-| Browser e2e | `pnpm --filter @senn/web e2e` (Playwright Chromium; real RTCPeerConnection handoff + text exchange + tampered URL + sandboxed add-on echo round-trip) |
+| Adapter contract tests (HTTP poll) | `pnpm --filter @senn/signaling-http-poll test` (mock + real Node reference server: round-trip, dedup, 4xx surfacing, no vendor lock-in) |
+| Storage backend tests | `pnpm --filter @senn/storage test` (in-memory backend: namespacing, quota, length, close, types) |
+| Browser e2e | `pnpm --filter @senn/web e2e` (Playwright Chromium; RTCPeerConnection handoff + text + tampered URL + add-on echo round-trip + add-on storage persist/reload + namespace) |
 
 When the spec intentionally changes, regenerate the fixture with
 `pnpm validate:invite <payload> --update` and include both the payload and
