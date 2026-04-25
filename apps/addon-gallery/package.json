@@ -1,0 +1,19 @@
+{
+  "name": "@senn/addon-gallery",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SENN add-on gallery — discovery, trust display, install hand-off (ADR-0016).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@senn/manifest": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^8.0.10"
+  }
+}

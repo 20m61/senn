@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https: http:; frame-ancestors 'self'"
+    />
+    <title>SENN Add-on Gallery</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <header>
+        <h1>SENN Add-on Gallery</h1>
+        <p class="tagline">Discover signed SENN add-ons. Bring your own host.</p>
+        <p class="muted">
+          The gallery is read-only. It fetches publisher registries, re-verifies every signed
+          manifest in your browser, and hands off the install URL to a SENN host you trust
+          (<a href="https://github.com/20m61/senn/blob/develop/docs/adr/0016-addon-gallery.md">ADR-0016</a>).
+        </p>
+      </header>
+
+      <section id="config" class="card">
+        <h2>Configuration</h2>
+        <div class="row">
+          <label class="grow">
+            preferred SENN host origin (used for the install hand-off URL):
+            <input id="host-origin" type="text" placeholder="http://127.0.0.1:5173" />
+          </label>
+        </div>
+        <h3>Registries</h3>
+        <ul id="registry-list" class="list"></ul>
+        <div class="row">
+          <label class="grow">
+            add registry URL (must serve the publisher index JSON):
+            <input id="registry-add" type="text" placeholder="http://127.0.0.1:5173/registry/official/index.json" />
+          </label>
+          <button id="btn-registry-add" type="button" data-testid="btn-registry-add">add</button>
+        </div>
+        <p id="config-status" class="muted" aria-live="polite"></p>
+      </section>
+
+      <section id="filter" class="card">
+        <h2>Browse</h2>
+        <div class="row">
+          <label class="grow">
+            search:
+            <input id="filter-q" type="text" placeholder="name or description…" data-testid="filter-q" />
+          </label>
+          <label>
+            capability:
+            <select id="filter-cap" data-testid="filter-cap">
+              <option value="">(any)</option>
+            </select>
+          </label>
+          <label>
+            registry:
+            <select id="filter-reg" data-testid="filter-reg">
+              <option value="">(any)</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section id="results">
+        <h2>Add-ons</h2>
+        <p id="results-status" class="muted" aria-live="polite">no registries loaded yet.</p>
+        <ul id="addon-cards" class="cards"></ul>
+      </section>
+
+      <footer>
+        <p class="muted">
+          SENN open core · Apache 2.0 ·
+          <a href="https://github.com/20m61/senn">github.com/20m61/senn</a>
+        </p>
+      </footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
