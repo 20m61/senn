@@ -1,0 +1,11 @@
+{
+  "v": 1,
+  "kind": "senn-publisher-meta",
+  "publishers": [
+    {
+      "url": "https://raw.githubusercontent.com/20m61/senn/develop/addons/official/index.json",
+      "name": "SENN Project (official)",
+      "featured": true
+    }
+  ]
+}

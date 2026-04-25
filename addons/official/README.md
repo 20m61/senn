@@ -72,6 +72,32 @@ type RegistryCategory =
 `pnpm verify:official` accepts both v1 and v2 inputs and validates the
 v2 optional fields when they are present.
 
+### Publisher meta-index (optional, ADR-0017 §3)
+
+A separate, **unsigned**, **non-trust-bearing** document points at one
+or more publisher index URLs so a host can pre-seed the gallery with
+multiple publishers without hard-coding URLs in code. The official
+worked example is [`meta.json`](meta.json).
+
+```ts
+interface PublisherMetaIndexV1 {
+  readonly v: 1;
+  readonly kind: "senn-publisher-meta";  // discriminator
+  readonly publishers: readonly PublisherEntryV1[];
+}
+
+interface PublisherEntryV1 {
+  readonly url: string;        // absolute http(s) URL of a publisher index.json
+  readonly name?: string;      // human label, ≤ 80 chars
+  readonly featured?: boolean; // hint for the gallery to surface this entry first
+}
+```
+
+The meta-index never adds trust — every publisher index it references
+still owns its own `trustedKeys`, and the gallery still re-verifies
+every signed manifest as it does today. `pnpm verify:official` runs
+the meta validator automatically when `meta.json` is present.
+
 ## Conformance
 
 ```sh

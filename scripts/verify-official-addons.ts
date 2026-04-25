@@ -62,24 +62,31 @@ interface Registry {
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_REGISTRY = resolve(REPO_ROOT, "addons/official/index.json");
+const DEFAULT_META = resolve(REPO_ROOT, "addons/official/meta.json");
 
 interface Args {
   readonly registry: string;
+  readonly meta: string;
 }
 
 function parseArgs(argv: readonly string[]): Args {
   let registry = DEFAULT_REGISTRY;
+  let meta = DEFAULT_META;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--registry") {
       const v = argv[++i];
       if (typeof v !== "string") throw new Error("--registry needs a path");
       registry = resolve(v);
+    } else if (a === "--meta") {
+      const v = argv[++i];
+      if (typeof v !== "string") throw new Error("--meta needs a path");
+      meta = resolve(v);
     } else if (a !== undefined) {
       throw new Error(`unknown argument: ${a}`);
     }
   }
-  return { registry };
+  return { registry, meta };
 }
 
 async function exists(p: string): Promise<boolean> {
@@ -202,6 +209,62 @@ function validateRegistry(input: unknown): Registry {
     trustedKeys: o.trustedKeys,
     addons,
   };
+}
+
+// ADR-0017 §3 — PublisherMetaIndexV1. Unsigned, non-trust-bearing.
+interface PublisherEntryV1 {
+  readonly url: string;
+  readonly name?: string;
+  readonly featured?: boolean;
+}
+
+interface PublisherMetaIndexV1 {
+  readonly v: 1;
+  readonly kind: "senn-publisher-meta";
+  readonly publishers: readonly PublisherEntryV1[];
+}
+
+function validateMetaIndex(input: unknown): PublisherMetaIndexV1 {
+  if (!input || typeof input !== "object") throw new Error("meta: not an object");
+  const o = input as Record<string, unknown>;
+  if (o.v !== 1) throw new Error("meta: v must be 1");
+  if (o.kind !== "senn-publisher-meta") {
+    throw new Error('meta: kind must be "senn-publisher-meta"');
+  }
+  if (!Array.isArray(o.publishers)) throw new Error("meta: publishers must be an array");
+  if (o.publishers.length === 0) throw new Error("meta: publishers must be non-empty");
+  const seen = new Set<string>();
+  const publishers: PublisherEntryV1[] = o.publishers.map((raw, i) => {
+    const where = `meta.publishers[${i}]`;
+    if (!raw || typeof raw !== "object") throw new Error(`${where}: not an object`);
+    const p = raw as Record<string, unknown>;
+    if (typeof p.url !== "string") throw new Error(`${where}.url: must be a string`);
+    let parsed: URL;
+    try {
+      parsed = new URL(p.url);
+    } catch {
+      throw new Error(`${where}.url: ${JSON.stringify(p.url)} is not an absolute URL`);
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      throw new Error(`${where}.url: must use http(s), got ${parsed.protocol}`);
+    }
+    if (seen.has(p.url)) throw new Error(`${where}.url: duplicate ${JSON.stringify(p.url)}`);
+    seen.add(p.url);
+    if (p.name !== undefined) {
+      if (typeof p.name !== "string" || p.name.length === 0 || p.name.length > 80) {
+        throw new Error(`${where}.name: must be 1..80 char string when present`);
+      }
+    }
+    if (p.featured !== undefined && typeof p.featured !== "boolean") {
+      throw new Error(`${where}.featured: must be boolean when present`);
+    }
+    return {
+      url: p.url,
+      ...(typeof p.name === "string" ? { name: p.name } : {}),
+      ...(typeof p.featured === "boolean" ? { featured: p.featured } : {}),
+    };
+  });
+  return { v: 1, kind: "senn-publisher-meta", publishers };
 }
 
 interface AddonResult {
@@ -332,6 +395,20 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   console.log(`verify-official-addons: ${results.length} ok`);
+
+  if (await exists(args.meta)) {
+    const meta = validateMetaIndex(JSON.parse(await readFile(args.meta, "utf8")));
+    console.log("");
+    console.log(`meta      ${args.meta}`);
+    console.log(`kind      ${meta.kind} v${meta.v}`);
+    console.log(`publishers ${meta.publishers.length}`);
+    for (const p of meta.publishers) {
+      const tag = p.featured ? "★" : " ";
+      console.log(`  ${tag} ${(p.name ?? "(unnamed)").padEnd(28)}  ${p.url}`);
+    }
+    console.log("");
+    console.log(`verify-meta-index: ${meta.publishers.length} publishers ok`);
+  }
 }
 
 main().catch((err) => {
