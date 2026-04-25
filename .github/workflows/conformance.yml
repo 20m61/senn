@@ -73,10 +73,14 @@ jobs:
         run: pnpm --filter @senn/web build
 
   e2e:
-    name: Playwright (chromium)
+    name: Playwright (${{ matrix.browser }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     needs: static
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     steps:
       - uses: actions/checkout@v4
 
@@ -105,18 +109,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.browser }}
 
-      - name: Install Playwright Chromium (with system deps)
+      - name: Install Playwright browser (with system deps)
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter @senn/web exec playwright install --with-deps chromium
+        run: pnpm --filter @senn/web exec playwright install --with-deps ${{ matrix.browser }}
 
       - name: Install Playwright system deps (cache hit)
         if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: pnpm --filter @senn/web exec playwright install-deps chromium
+        run: pnpm --filter @senn/web exec playwright install-deps ${{ matrix.browser }}
 
       - name: Run e2e
-        run: pnpm --filter @senn/web e2e
+        run: pnpm --filter @senn/web e2e --project=${{ matrix.browser }}
         env:
           CI: "1"
 
@@ -124,6 +128,6 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.browser }}
           path: apps/web/playwright-report
           retention-days: 7
