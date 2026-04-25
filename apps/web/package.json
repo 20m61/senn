@@ -13,6 +13,7 @@
   "dependencies": {
     "@senn/core": "workspace:*",
     "@senn/protocol": "workspace:*",
+    "@senn/signaling-url-fragment": "workspace:*",
     "@senn/storage": "workspace:*",
     "@senn/ui": "workspace:*"
   },

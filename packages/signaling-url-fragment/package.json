@@ -1,0 +1,23 @@
+{
+  "name": "@senn/signaling-url-fragment",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tier-0 SENN signaling adapter — out-of-band transport via URL fragment / QR / copy-paste.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@senn/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.5"
+  }
+}

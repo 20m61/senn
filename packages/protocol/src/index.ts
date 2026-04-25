@@ -31,6 +31,17 @@ export {
 } from "./invite.js";
 export type { InvitePayload } from "./invite.js";
 
+export {
+  BundleValidationError,
+  decodeSignalingBundle,
+  encodeSignalingBundle,
+  extractBundleFromUrl,
+  SIGNALING_BUNDLE_FRAGMENT_KEY,
+  SIGNALING_BUNDLE_VERSION,
+  validateSignalingBundle,
+} from "./bundle.js";
+export type { SignalingBundleV1 } from "./bundle.js";
+
 export type MessageKind = "core.message" | "addon.message";
 
 export interface CoreMessageEnvelope {

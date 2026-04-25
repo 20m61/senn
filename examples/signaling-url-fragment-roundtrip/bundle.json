@@ -1,0 +1,11 @@
+{
+  "v": 1,
+  "roomId": "01jrmcv3p4n8e7y9w0q5t2k1h6",
+  "messages": [
+    {
+      "kind": "offer",
+      "from": "01jrmcv3p4abcdefghjkmnpqrs",
+      "sdp": "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\n"
+    }
+  ]
+}

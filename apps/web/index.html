@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SENN</title>
+    <title>SENN — Tier 0 signaling demo</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -12,8 +12,47 @@
         <h1>SENN</h1>
         <p class="tagline">線でつながる。サーバに預けない。</p>
       </header>
-      <section id="status" aria-live="polite">
-        <p>Pre-alpha PoC. Core not yet wired.</p>
+
+      <section id="status" aria-live="polite"></section>
+
+      <section class="demo">
+        <h2>Tier 0 signaling demo</h2>
+        <p class="muted">
+          Open this page in two tabs. Use one tab as <strong>inviter</strong>, the other as
+          <strong>joiner</strong>. Bundles travel via copy-paste — no server is contacted.
+        </p>
+
+        <div class="row">
+          <button id="btn-create-room">① Create room (inviter)</button>
+          <span id="room-id" class="mono"></span>
+        </div>
+
+        <div class="row">
+          <label>
+            ② Compose a signaling message and send it:
+            <select id="msg-kind">
+              <option value="offer">offer</option>
+              <option value="answer">answer</option>
+              <option value="ice">ice</option>
+              <option value="bye">bye</option>
+            </select>
+          </label>
+          <button id="btn-publish">publish</button>
+          <button id="btn-export">export bundle URL</button>
+        </div>
+
+        <textarea id="export-out" rows="3" readonly placeholder="exported URL appears here"></textarea>
+
+        <div class="row">
+          <label class="grow">
+            ③ Paste a bundle URL from the other tab:
+            <input id="import-in" type="text" placeholder="https://…/#s=…" />
+          </label>
+          <button id="btn-import">import</button>
+        </div>
+
+        <h3>Inbox</h3>
+        <ul id="inbox" class="inbox"></ul>
       </section>
     </main>
     <script type="module" src="/src/main.ts"></script>

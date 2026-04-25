@@ -43,13 +43,13 @@ Non-functional requirements:
 
 ## Reference adapters (planned)
 
-| Adapter | Package (planned) | Tier |
-|---------|------------------|------|
-| URL fragment | `@senn/signaling-url-fragment` | Tier 0 |
-| HTTP short-poll | `@senn/signaling-http-poll` | Tier 1 |
-| WebSocket | `@senn/signaling-ws` | Tier 2 |
-| Nostr relay | `@senn/signaling-nostr` (proposed) | optional |
-| Matrix room | `@senn/signaling-matrix` (proposed) | optional |
+| Adapter | Package | Tier | Status |
+|---------|--------|------|--------|
+| URL fragment | `@senn/signaling-url-fragment` | Tier 0 | shipped (see [/docs/signaling-url-fragment-spec.md](../signaling-url-fragment-spec.md)) |
+| HTTP short-poll | `@senn/signaling-http-poll` (planned) | Tier 1 | not started |
+| WebSocket | `@senn/signaling-ws` (planned) | Tier 2 | not started |
+| Nostr relay | `@senn/signaling-nostr` (proposed) | optional | needs ADR |
+| Matrix room | `@senn/signaling-matrix` (proposed) | optional | needs ADR |
 
 Until these packages are published, host applications can ship their own
 adapter that satisfies the interface. See the cookbook below.

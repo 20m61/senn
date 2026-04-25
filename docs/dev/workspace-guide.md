@@ -15,12 +15,13 @@ senn/
     web/                  Reference SENN web app (Vite + TS PoC)
     addon-gallery/        (planned) Add-on discovery UI
   packages/
-    core/                 SENN Core runtime — rooms, transport, message router, add-on host
-    protocol/             Wire protocol — envelopes, capability negotiation, SignalingTransport
-    addon-sdk/            Developer SDK for static add-ons
-    addon-runtime/        Sandboxed iframe host that runs add-ons inside the host app
-    storage/              Local-first storage (IndexedDB / OPFS) per-add-on namespaces
-    ui/                   Lightweight UI primitives shared across apps
+    core/                       SENN Core runtime — rooms, transport, message router, add-on host
+    protocol/                   Wire protocol — envelopes, capability negotiation, SignalingTransport
+    addon-sdk/                  Developer SDK for static add-ons
+    addon-runtime/              Sandboxed iframe host that runs add-ons inside the host app
+    signaling-url-fragment/     Tier-0 reference adapter (out-of-band via URL fragment / QR)
+    storage/                    Local-first storage (IndexedDB / OPFS) per-add-on namespaces
+    ui/                         Lightweight UI primitives shared across apps
   addons/
     official/             Add-ons maintained by the SENN project (Local Profile, Vault, …)
   examples/
@@ -36,15 +37,16 @@ senn/
 ## Dependency rules (MUST follow)
 
 ```
-@senn/protocol         depends on: nothing in this repo
-@senn/storage          depends on: nothing in this repo
-@senn/ui               depends on: nothing in this repo
-@senn/addon-sdk        depends on: @senn/protocol
-@senn/addon-runtime    depends on: @senn/protocol
-@senn/core             depends on: @senn/protocol, @senn/storage, @senn/addon-runtime
-apps/web               depends on: @senn/core, @senn/protocol, @senn/storage, @senn/ui
-addons/official/*      depends on: @senn/addon-sdk only (must run as static add-ons)
-examples/*             depends on: @senn/addon-sdk only
+@senn/protocol               depends on: nothing in this repo
+@senn/storage                depends on: nothing in this repo
+@senn/ui                     depends on: nothing in this repo
+@senn/addon-sdk              depends on: @senn/protocol
+@senn/addon-runtime          depends on: @senn/protocol
+@senn/signaling-url-fragment depends on: @senn/protocol
+@senn/core                   depends on: @senn/protocol, @senn/storage, @senn/addon-runtime
+apps/web                     depends on: @senn/core, @senn/protocol, @senn/signaling-url-fragment, @senn/storage, @senn/ui
+addons/official/*            depends on: @senn/addon-sdk only (must run as static add-ons)
+examples/*                   depends on: @senn/addon-sdk only
 ```
 
 - `@senn/protocol` MUST stay free of runtime concerns (no DOM, no IndexedDB).
