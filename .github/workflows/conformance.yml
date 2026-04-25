@@ -1,0 +1,114 @@
+name: conformance
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: typecheck · lint · validators · vitest · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Validate all manifests
+        run: pnpm validate:all-manifests
+
+      - name: Validate invite fixture
+        run: pnpm validate:invite examples/invite-roundtrip/payload.json
+
+      - name: Validate bundle fixture
+        run: pnpm validate:bundle examples/signaling-url-fragment-roundtrip/bundle.json
+
+      - name: Vitest (workspace)
+        run: pnpm test
+
+      - name: Build apps/web
+        run: pnpm --filter @senn/web build
+
+  e2e:
+    name: Playwright (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: static
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve Playwright version
+        id: pw
+        run: |
+          version=$(node -p "require('./apps/web/node_modules/@playwright/test/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright Chromium (with system deps)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @senn/web exec playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @senn/web exec playwright install-deps chromium
+
+      - name: Run e2e
+        run: pnpm --filter @senn/web e2e
+        env:
+          CI: "1"
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
