@@ -51,6 +51,15 @@ jobs:
       - name: Verify official add-on registry signatures
         run: pnpm verify:official
 
+      - name: Verify shipped addon-sdk runtime is up to date
+        run: |
+          pnpm build:addon-sdk
+          if [ -n "$(git status --porcelain apps/web/public/addons examples)" ]; then
+            echo "::error::shipped senn-addon-sdk.js is stale; run 'pnpm build:addon-sdk' and commit"
+            git --no-pager diff -- apps/web/public/addons examples
+            exit 1
+          fi
+
       - name: Validate invite fixture
         run: pnpm validate:invite examples/invite-roundtrip/payload.json
 

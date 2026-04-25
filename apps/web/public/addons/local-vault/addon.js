@@ -1,12 +1,9 @@
-// SENN Local Vault add-on. Conforms to docs/addon-file-transfer-spec.md
-// and docs/addon-storage-spec.md.
-//
-// Files are stored as base64 inside the per-add-on storage namespace.
-// Nothing leaves the device — the CSP `connect-src 'none'` makes
-// network access impossible for this iframe.
+// SENN Local Vault add-on. Conforms to docs/addon-file-transfer-spec.md,
+// docs/addon-storage-spec.md, and docs/addon-binary-transfer-spec.md.
+// Uses @senn/addon-sdk's window.senn — no postMessage plumbing here.
 
-const KIND = "senn.addon.v1";
 const KEY_PREFIX = "vault/";
+const PEER_BIN_MAX_BYTES = 64 * 1024;
 
 const stateEl = document.getElementById("state");
 const opStatus = document.getElementById("op-status");
@@ -14,19 +11,8 @@ const picker = document.getElementById("picker");
 const btnAdd = document.getElementById("btn-add");
 const listEl = document.getElementById("list");
 const inboxEl = document.getElementById("inbox");
-const PEER_BIN_MAX_BYTES = 64 * 1024;
 
 let initialized = false;
-const pendingRpc = new Map();
-let nextRid = 0;
-
-function rpc(req) {
-  return new Promise((resolve, reject) => {
-    const rid = `r_${++nextRid}`;
-    pendingRpc.set(rid, { resolve, reject });
-    parent.postMessage({ kind: KIND, op: "storage", rid, ...req }, "*");
-  });
-}
 
 function setStatus(text) {
   opStatus.textContent = text;
@@ -46,7 +32,7 @@ function base64ToBytes(b64) {
 }
 
 async function refreshList() {
-  const keys = await rpc({ storage: "list" });
+  const keys = await senn.storage.list();
   listEl.replaceChildren();
   const fileKeys = keys.filter((k) => k.startsWith(KEY_PREFIX));
   if (fileKeys.length === 0) {
@@ -57,7 +43,7 @@ async function refreshList() {
     return;
   }
   for (const k of fileKeys) {
-    const rec = await rpc({ storage: "get", key: k });
+    const rec = await senn.storage.get(k);
     if (!rec) continue;
     const li = document.createElement("li");
     const name = document.createElement("span");
@@ -83,7 +69,7 @@ async function refreshList() {
     rm.textContent = "delete";
     rm.className = "delete";
     rm.addEventListener("click", async () => {
-      await rpc({ storage: "delete", key: k });
+      await senn.storage.delete(k);
       setStatus(`deleted ${rec.name}`);
       await refreshList();
     });
@@ -113,19 +99,14 @@ function sendToPeer(rec) {
     setStatus(`too large to send including filename (${frame.byteLength} B)`);
     return;
   }
-  parent.postMessage(
-    {
-      kind: KIND,
-      op: "send-bin",
-      mime: rec.type || "application/octet-stream",
-      bytes: frame,
-    },
-    "*",
-  );
+  senn.peer.sendBinary({
+    mime: rec.type || "application/octet-stream",
+    bytes: frame,
+  });
   setStatus(`sent ${rec.name} (${bytes.byteLength} B) to peer`);
 }
 
-function handleIncoming(mime, framedBytes, _from) {
+function handleIncoming(mime, framedBytes) {
   if (framedBytes.byteLength < 2) return;
   const nameLen = new DataView(framedBytes.buffer, framedBytes.byteOffset, 2).getUint16(0, true);
   if (2 + nameLen > framedBytes.byteLength) return;
@@ -151,7 +132,7 @@ function handleIncoming(mime, framedBytes, _from) {
       size: body.byteLength,
       b64: bytesToBase64(body),
     };
-    await rpc({ storage: "put", key: `${KEY_PREFIX}${name}`, value: rec });
+    await senn.storage.put(`${KEY_PREFIX}${name}`, rec);
     setStatus(`saved received file ${name} to vault`);
     await refreshList();
   });
@@ -201,7 +182,7 @@ btnAdd.addEventListener("click", async () => {
       size: bytes.byteLength,
       b64: bytesToBase64(bytes),
     };
-    await rpc({ storage: "put", key: `${KEY_PREFIX}${file.name}`, value: rec });
+    await senn.storage.put(`${KEY_PREFIX}${file.name}`, rec);
     setStatus(`added ${file.name} (${bytes.byteLength} B)`);
     picker.value = "";
     await refreshList();
@@ -210,37 +191,14 @@ btnAdd.addEventListener("click", async () => {
   }
 });
 
-window.addEventListener("message", (ev) => {
-  if (ev.source !== parent) return;
-  const msg = ev.data;
-  if (!msg || msg.kind !== KIND) return;
+senn.on("deliver-bin", ({ mime, bytes }) => handleIncoming(mime, bytes));
+senn.on("error", (err) => setStatus(`bridge error: ${err.message}`));
 
-  switch (msg.op) {
-    case "init":
-      stateEl.textContent = `init (${msg.addonId} v${msg.version})`;
-      initialized = true;
-      // Best-effort initial render — tolerated to fail before the host's
-      // first storage call resolves.
-      refreshList().catch(() => undefined);
-      break;
-    case "storage.result": {
-      const pending = pendingRpc.get(msg.rid);
-      if (!pending) return;
-      pendingRpc.delete(msg.rid);
-      if (msg.ok) pending.resolve(msg.value);
-      else pending.reject(new Error(msg.error));
-      break;
-    }
-    case "deliver-bin": {
-      handleIncoming(msg.mime, msg.bytes, msg.from);
-      break;
-    }
-    case "error": {
-      setStatus(`bridge error: ${msg.message}`);
-      break;
-    }
-  }
+senn.ready().then((ctx) => {
+  stateEl.textContent = `init (${ctx.addonId} v${ctx.version})`;
+  initialized = true;
+  // Best-effort initial render — tolerated to fail before the host's first
+  // storage call resolves.
+  refreshList().catch(() => undefined);
 });
-
-parent.postMessage({ kind: KIND, op: "ready" }, "*");
 stateEl.textContent = "ready";
