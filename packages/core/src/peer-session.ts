@@ -21,9 +21,17 @@ export type PeerSessionState = "idle" | "connecting" | "connected" | "closed" | 
 
 export type PeerSessionRole = "inviter" | "joiner";
 
+export interface PeerSessionBinaryMessage {
+  /** Routing key (e.g. addon id). Used by AddonHost to demux per-addon. */
+  readonly addon: string;
+  readonly mime: string;
+  readonly bytes: Uint8Array;
+}
+
 export interface PeerSessionEvents {
   state: PeerSessionState;
   text: string;
+  binary: PeerSessionBinaryMessage;
   error: Error;
 }
 
@@ -36,8 +44,10 @@ export interface PeerSessionOptions {
   readonly rtcConfig: RTCConfiguration;
 }
 
-const DATA_CHANNEL_LABEL = "core.text";
+const TEXT_CHANNEL_LABEL = "core.text";
+const BIN_CHANNEL_LABEL = "core.bin";
 const TEXT_MAX_BYTES = 64 * 1024;
+const BIN_MAX_BYTES = 64 * 1024;
 
 type Listener<T> = (value: T) => void;
 
@@ -52,6 +62,7 @@ export class PeerSession {
 
   private pc: RTCPeerConnection | null = null;
   private channel: RTCDataChannel | null = null;
+  private binChannel: RTCDataChannel | null = null;
   private signalingUnsub: Unsubscribe | null = null;
 
   private currentState: PeerSessionState = "idle";
@@ -60,6 +71,7 @@ export class PeerSession {
   } = {
     state: new Set(),
     text: new Set(),
+    binary: new Set(),
     error: new Set(),
   };
 
@@ -132,15 +144,23 @@ export class PeerSession {
     };
 
     if (this.role === "inviter") {
-      const channel = pc.createDataChannel(DATA_CHANNEL_LABEL);
+      const channel = pc.createDataChannel(TEXT_CHANNEL_LABEL);
       this.bindDataChannel(channel);
+      const binChannel = pc.createDataChannel(BIN_CHANNEL_LABEL, { ordered: true });
+      binChannel.binaryType = "arraybuffer";
+      this.bindBinaryChannel(binChannel);
     } else {
       pc.ondatachannel = (ev) => {
-        if (ev.channel.label !== DATA_CHANNEL_LABEL) {
-          ev.channel.close();
+        if (ev.channel.label === TEXT_CHANNEL_LABEL) {
+          this.bindDataChannel(ev.channel);
           return;
         }
-        this.bindDataChannel(ev.channel);
+        if (ev.channel.label === BIN_CHANNEL_LABEL) {
+          ev.channel.binaryType = "arraybuffer";
+          this.bindBinaryChannel(ev.channel);
+          return;
+        }
+        ev.channel.close();
       };
     }
 
@@ -175,6 +195,42 @@ export class PeerSession {
     this.channel.send(message);
   }
 
+  async sendBinary(message: PeerSessionBinaryMessage): Promise<void> {
+    if (this.currentState !== "connected") {
+      throw new Error(`PeerSession.sendBinary() called in state ${this.currentState}`);
+    }
+    if (typeof message.addon !== "string" || message.addon.length === 0) {
+      throw new Error("PeerSession.sendBinary: addon must be a non-empty string");
+    }
+    if (typeof message.mime !== "string") {
+      throw new Error("PeerSession.sendBinary: mime must be a string");
+    }
+    if (!(message.bytes instanceof Uint8Array)) {
+      throw new Error("PeerSession.sendBinary: bytes must be a Uint8Array");
+    }
+    if (message.bytes.byteLength > BIN_MAX_BYTES) {
+      throw new Error(
+        `PeerSession.sendBinary: payload ${message.bytes.byteLength}B exceeds ${BIN_MAX_BYTES}B`,
+      );
+    }
+    if (!this.binChannel || this.binChannel.readyState !== "open") {
+      throw new Error("PeerSession.sendBinary: binary channel is not open");
+    }
+    const headerJson = JSON.stringify({
+      v: 1,
+      addon: message.addon,
+      mime: message.mime,
+      size: message.bytes.byteLength,
+    });
+    const headerBytes = new TextEncoder().encode(headerJson);
+    const frame = new ArrayBuffer(4 + headerBytes.byteLength + message.bytes.byteLength);
+    const view = new DataView(frame);
+    view.setUint32(0, headerBytes.byteLength, true);
+    new Uint8Array(frame, 4, headerBytes.byteLength).set(headerBytes);
+    new Uint8Array(frame, 4 + headerBytes.byteLength, message.bytes.byteLength).set(message.bytes);
+    this.binChannel.send(frame);
+  }
+
   async close(): Promise<void> {
     if (this.currentState === "closed") return;
     const wasActive = this.currentState !== "idle";
@@ -191,6 +247,8 @@ export class PeerSession {
       this.signalingUnsub = null;
       this.channel?.close();
       this.channel = null;
+      this.binChannel?.close();
+      this.binChannel = null;
       this.pc?.close();
       this.pc = null;
     }
@@ -207,9 +265,71 @@ export class PeerSession {
       this.emit("error", err as Error);
     };
     channel.onmessage = (ev) => {
-      if (typeof ev.data !== "string") return; // binary frames not yet defined
+      if (typeof ev.data !== "string") return; // binary frames belong on core.bin
       this.emit("text", ev.data);
     };
+  }
+
+  private bindBinaryChannel(channel: RTCDataChannel): void {
+    this.binChannel = channel;
+    channel.onerror = (ev) => {
+      const err = (ev as RTCErrorEvent).error ?? new Error("RTCDataChannel error (bin)");
+      this.emit("error", err as Error);
+    };
+    channel.onmessage = (ev) => {
+      const data = ev.data;
+      let buf: ArrayBuffer | null = null;
+      if (data instanceof ArrayBuffer) {
+        buf = data;
+      } else if (data && typeof (data as Blob).arrayBuffer === "function") {
+        // Some implementations deliver Blob even with binaryType=arraybuffer.
+        void (data as Blob).arrayBuffer().then((b) => this.handleBinaryFrame(b));
+        return;
+      } else {
+        this.emit("error", new Error("PeerSession.bin: unexpected non-binary frame"));
+        return;
+      }
+      this.handleBinaryFrame(buf);
+    };
+  }
+
+  private handleBinaryFrame(buf: ArrayBuffer): void {
+    if (buf.byteLength < 4) {
+      this.emit("error", new Error("PeerSession.bin: frame too short for header_len"));
+      return;
+    }
+    const view = new DataView(buf);
+    const headerLen = view.getUint32(0, true);
+    if (headerLen === 0 || 4 + headerLen > buf.byteLength) {
+      this.emit("error", new Error("PeerSession.bin: header_len out of range"));
+      return;
+    }
+    let header: { v?: unknown; addon?: unknown; mime?: unknown; size?: unknown };
+    try {
+      const headerText = new TextDecoder().decode(new Uint8Array(buf, 4, headerLen));
+      header = JSON.parse(headerText);
+    } catch (err) {
+      this.emit("error", new Error(`PeerSession.bin: header parse: ${(err as Error).message}`));
+      return;
+    }
+    if (
+      header.v !== 1 ||
+      typeof header.addon !== "string" ||
+      header.addon.length === 0 ||
+      typeof header.mime !== "string" ||
+      typeof header.size !== "number"
+    ) {
+      this.emit("error", new Error("PeerSession.bin: header schema invalid"));
+      return;
+    }
+    const bodyOffset = 4 + headerLen;
+    const bodyLen = buf.byteLength - bodyOffset;
+    if (header.size !== bodyLen) {
+      this.emit("error", new Error("PeerSession.bin: header.size != body length"));
+      return;
+    }
+    const bytes = new Uint8Array(buf.slice(bodyOffset));
+    this.emit("binary", { addon: header.addon, mime: header.mime, bytes });
   }
 
   private async handleSignalingMessage(msg: SignalingMessage): Promise<void> {

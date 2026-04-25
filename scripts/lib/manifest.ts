@@ -21,6 +21,8 @@ export const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z
 export const KNOWN_PERMISSIONS: ReadonlySet<string> = new Set([
   "peer.send",
   "peer.receive",
+  "peer.send.bin",
+  "peer.receive.bin",
   "storage.local.read",
   "storage.local.write",
   "file.read.user_selected",

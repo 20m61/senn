@@ -2,7 +2,7 @@
   "id": "dev.senn.local-vault",
   "name": "Local Vault",
   "version": "0.1.0",
-  "description": "Stores user-selected files in local-first storage and downloads them again on demand. No network.",
+  "description": "Stores user-selected files locally and ships them P2P (≤ 64 KiB single-frame) to the connected peer.",
   "entry": "index.html",
   "license": "Apache-2.0",
   "author": "SENN Project",
@@ -12,6 +12,8 @@
     "storage.local.write",
     "file.read.user_selected",
     "file.write.user_approved",
+    "peer.send.bin",
+    "peer.receive.bin",
     "ui.panel"
   ],
   "capabilities": ["local-vault-v1"]

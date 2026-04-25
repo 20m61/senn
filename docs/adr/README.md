@@ -35,3 +35,4 @@ Proposed | Accepted | Superseded by ADR-XXXX | Deprecated
 | 0008 | [Manifest signing](0008-manifest-signing.md) | Accepted |
 | 0009 | [Keystore minimum](0009-keystore-minimum.md) | Accepted |
 | 0010 | [Key rotation](0010-key-rotation.md) | Accepted |
+| 0011 | [Binary peer transfer](0011-binary-peer-transfer.md) | Accepted |

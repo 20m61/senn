@@ -13,6 +13,8 @@ const opStatus = document.getElementById("op-status");
 const picker = document.getElementById("picker");
 const btnAdd = document.getElementById("btn-add");
 const listEl = document.getElementById("list");
+const inboxEl = document.getElementById("inbox");
+const PEER_BIN_MAX_BYTES = 64 * 1024;
 
 let initialized = false;
 const pendingRpc = new Map();
@@ -70,6 +72,12 @@ async function refreshList() {
     dl.textContent = "download";
     dl.className = "download";
     dl.addEventListener("click", () => downloadKey(k, rec));
+    const send = document.createElement("button");
+    send.type = "button";
+    send.textContent = "send to peer";
+    send.className = "send";
+    send.dataset.testid = "send-to-peer";
+    send.addEventListener("click", () => sendToPeer(rec));
     const rm = document.createElement("button");
     rm.type = "button";
     rm.textContent = "delete";
@@ -79,9 +87,77 @@ async function refreshList() {
       setStatus(`deleted ${rec.name}`);
       await refreshList();
     });
-    li.append(name, meta, dl, rm);
+    li.append(name, meta, dl, send, rm);
     listEl.append(li);
   }
+}
+
+function sendToPeer(rec) {
+  const bytes = base64ToBytes(rec.b64);
+  if (bytes.byteLength > PEER_BIN_MAX_BYTES) {
+    setStatus(`too large to send (${bytes.byteLength} B; cap ${PEER_BIN_MAX_BYTES} B)`);
+    return;
+  }
+  // Frame the filename into the bytes so the receiver knows what to label
+  // it. Header layout: u16 LE name_len, name UTF-8, body bytes.
+  const nameBytes = new TextEncoder().encode(rec.name);
+  if (nameBytes.byteLength > 255) {
+    setStatus("filename too long to send (max 255 B UTF-8)");
+    return;
+  }
+  const frame = new Uint8Array(2 + nameBytes.byteLength + bytes.byteLength);
+  new DataView(frame.buffer).setUint16(0, nameBytes.byteLength, true);
+  frame.set(nameBytes, 2);
+  frame.set(bytes, 2 + nameBytes.byteLength);
+  if (frame.byteLength > PEER_BIN_MAX_BYTES) {
+    setStatus(`too large to send including filename (${frame.byteLength} B)`);
+    return;
+  }
+  parent.postMessage(
+    {
+      kind: KIND,
+      op: "send-bin",
+      mime: rec.type || "application/octet-stream",
+      bytes: frame,
+    },
+    "*",
+  );
+  setStatus(`sent ${rec.name} (${bytes.byteLength} B) to peer`);
+}
+
+function handleIncoming(mime, framedBytes, _from) {
+  if (framedBytes.byteLength < 2) return;
+  const nameLen = new DataView(framedBytes.buffer, framedBytes.byteOffset, 2).getUint16(0, true);
+  if (2 + nameLen > framedBytes.byteLength) return;
+  const name = new TextDecoder().decode(framedBytes.subarray(2, 2 + nameLen));
+  const body = framedBytes.subarray(2 + nameLen);
+  const li = document.createElement("li");
+  const nameEl = document.createElement("span");
+  nameEl.className = "name";
+  nameEl.textContent = name;
+  nameEl.dataset.testid = "inbox-name";
+  const meta = document.createElement("span");
+  meta.className = "meta";
+  meta.textContent = `${body.byteLength} B · ${mime || "?"}`;
+  const save = document.createElement("button");
+  save.type = "button";
+  save.textContent = "save to vault";
+  save.className = "save";
+  save.dataset.testid = "inbox-save";
+  save.addEventListener("click", async () => {
+    const rec = {
+      name,
+      type: mime || "",
+      size: body.byteLength,
+      b64: bytesToBase64(body),
+    };
+    await rpc({ storage: "put", key: `${KEY_PREFIX}${name}`, value: rec });
+    setStatus(`saved received file ${name} to vault`);
+    await refreshList();
+  });
+  li.append(nameEl, meta, save);
+  inboxEl.append(li);
+  setStatus(`received ${name} (${body.byteLength} B)`);
 }
 
 function downloadKey(_k, rec) {
@@ -153,6 +229,14 @@ window.addEventListener("message", (ev) => {
       pendingRpc.delete(msg.rid);
       if (msg.ok) pending.resolve(msg.value);
       else pending.reject(new Error(msg.error));
+      break;
+    }
+    case "deliver-bin": {
+      handleIncoming(msg.mime, msg.bytes, msg.from);
+      break;
+    }
+    case "error": {
+      setStatus(`bridge error: ${msg.message}`);
       break;
     }
   }

@@ -64,6 +64,16 @@ Allows sending add-on messages to connected peers through SENN Core.
 
 Allows receiving add-on messages from connected peers through SENN Core.
 
+### `peer.send.bin`
+
+Allows sending binary payloads (≤ 64 KiB single-frame, v1) to the
+connected peer over the dedicated `core.bin` channel. See
+[addon-binary-transfer-spec.md](addon-binary-transfer-spec.md).
+
+### `peer.receive.bin`
+
+Allows receiving binary payloads from connected peers over `core.bin`.
+
 ### `storage.local.read`
 
 Allows reading the add-on's own local storage namespace.

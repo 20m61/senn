@@ -29,7 +29,12 @@ import {
  */
 export interface AddonPeerLink {
   on(event: "text", handler: (text: string) => void): () => void;
+  on(
+    event: "binary",
+    handler: (msg: { addon: string; mime: string; bytes: Uint8Array }) => void,
+  ): () => void;
   sendText(message: string): Promise<void>;
+  sendBinary(message: { addon: string; mime: string; bytes: Uint8Array }): Promise<void>;
 }
 
 export const SENN_ADDON_RUNTIME_VERSION = "0.0.0";
@@ -50,7 +55,15 @@ export type AddonBridgeMessage =
   | { kind: typeof ADDON_BRIDGE_KIND; op: "ready" }
   | { kind: typeof ADDON_BRIDGE_KIND; op: "send"; payload: unknown }
   | { kind: typeof ADDON_BRIDGE_KIND; op: "deliver"; payload: unknown; from?: string }
-  | { kind: typeof ADDON_BRIDGE_KIND; op: "error"; message: string }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "send-bin"; mime: string; bytes: Uint8Array }
+  | {
+      kind: typeof ADDON_BRIDGE_KIND;
+      op: "deliver-bin";
+      mime: string;
+      bytes: Uint8Array;
+      from?: string;
+    }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "error"; code?: string; message: string }
   | {
       kind: typeof ADDON_BRIDGE_KIND;
       op: "storage";
@@ -123,6 +136,8 @@ const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$
 const KNOWN_PERMISSIONS: ReadonlySet<string> = new Set([
   "peer.send",
   "peer.receive",
+  "peer.send.bin",
+  "peer.receive.bin",
   "storage.local.read",
   "storage.local.write",
   "file.read.user_selected",
@@ -132,6 +147,8 @@ const KNOWN_PERMISSIONS: ReadonlySet<string> = new Set([
   "presence.read",
   "audio.level",
 ]);
+
+const ADDON_BIN_MAX_BYTES = 64 * 1024;
 
 function asObject(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -310,6 +327,21 @@ export class AddonHost {
     );
   }
 
+  /** Push binary bytes to the add-on. Requires `peer.receive.bin`. */
+  async deliverBinary(mime: string, bytes: Uint8Array, from?: string): Promise<void> {
+    if (this.currentState !== "active") {
+      throw new Error(`AddonHost.deliverBinary() called in state ${this.currentState}`);
+    }
+    if (!this.manifest.permissions.includes("peer.receive.bin")) {
+      throw new Error("addon manifest does not declare peer.receive.bin");
+    }
+    this.postToIframe(
+      from === undefined
+        ? { kind: ADDON_BRIDGE_KIND, op: "deliver-bin", mime, bytes }
+        : { kind: ADDON_BRIDGE_KIND, op: "deliver-bin", mime, bytes, from },
+    );
+  }
+
   async close(): Promise<void> {
     if (this.currentState === "closed") return;
     this.setState("closed");
@@ -393,6 +425,9 @@ export class AddonHost {
         return;
       case "send":
         this.handleSend(msg.payload);
+        return;
+      case "send-bin":
+        this.handleSendBin(msg.mime, msg.bytes);
         return;
       case "error":
         this.emit("error", new Error(`addon: ${msg.message}`));
@@ -510,8 +545,55 @@ export class AddonHost {
     }
   }
 
+  private handleSendBin(mime: unknown, bytes: unknown): void {
+    if (!this.manifest.permissions.includes("peer.send.bin")) {
+      this.postToIframe({
+        kind: ADDON_BRIDGE_KIND,
+        op: "error",
+        code: "permission-denied",
+        message: "addon attempted send-bin without peer.send.bin permission",
+      });
+      return;
+    }
+    if (typeof mime !== "string" || !(bytes instanceof Uint8Array)) {
+      this.postToIframe({
+        kind: ADDON_BRIDGE_KIND,
+        op: "error",
+        code: "bad-payload",
+        message: "send-bin: mime must be string and bytes must be Uint8Array",
+      });
+      return;
+    }
+    if (bytes.byteLength > ADDON_BIN_MAX_BYTES) {
+      this.postToIframe({
+        kind: ADDON_BRIDGE_KIND,
+        op: "error",
+        code: "payload-too-large",
+        message: `send-bin: ${bytes.byteLength}B exceeds ${ADDON_BIN_MAX_BYTES}B`,
+      });
+      return;
+    }
+    if (!this.session) {
+      this.postToIframe({
+        kind: ADDON_BRIDGE_KIND,
+        op: "error",
+        code: "not-connected",
+        message: "send-bin: no peer link",
+      });
+      return;
+    }
+    void this.session.sendBinary({ addon: this.manifest.id, mime, bytes }).catch((err: Error) => {
+      this.postToIframe({
+        kind: ADDON_BRIDGE_KIND,
+        op: "error",
+        code: "not-connected",
+        message: err.message,
+      });
+    });
+  }
+
   private bindToSession(session: AddonPeerLink): void {
-    this.detachPeer = session.on("text", (json) => {
+    const offText = session.on("text", (json) => {
       const envelope = tryParseAddonEnvelope(json);
       if (!envelope) return;
       if (envelope.addon !== this.manifest.id) return;
@@ -519,6 +601,17 @@ export class AddonHost {
         this.emit("error", err as Error);
       });
     });
+    const offBin = session.on("binary", (msg) => {
+      if (msg.addon !== this.manifest.id) return;
+      if (!this.manifest.permissions.includes("peer.receive.bin")) return;
+      void this.deliverBinary(msg.mime, msg.bytes, msg.addon).catch((err) => {
+        this.emit("error", err as Error);
+      });
+    });
+    this.detachPeer = () => {
+      offText();
+      offBin();
+    };
   }
 
   private setState(next: AddonHostState): void {

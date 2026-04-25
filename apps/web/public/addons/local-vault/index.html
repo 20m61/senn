@@ -14,7 +14,8 @@
       <h1>Local Vault</h1>
       <p>state: <span id="state">booting</span></p>
       <p class="muted">
-        Files you add here are stored locally in this browser only. Nothing leaves the device.
+        Files you add here stay on this device. Sending to a peer goes directly over the WebRTC
+        data channel — never through a server. Single-frame, ≤ 64 KiB per file.
       </p>
       <div class="row">
         <input id="picker" type="file" />
@@ -23,6 +24,8 @@
       <p class="status" id="op-status" aria-live="polite"></p>
       <h2>Stored files</h2>
       <ul id="list" class="list"></ul>
+      <h2>Received from peer</h2>
+      <ul id="inbox" class="list"></ul>
     </main>
     <script src="addon.js"></script>
   </body>
