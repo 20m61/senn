@@ -46,24 +46,16 @@ export type { SignalingBundleV1 } from "./bundle.js";
 
 export type MessageKind = "core.message" | "addon.message";
 
-export interface CoreMessageEnvelope {
-  id: string;
-  kind: "core.message";
-  type: string;
-  createdAt: number;
-  payload: unknown;
-}
-
-export interface AddonMessageEnvelope {
-  id: string;
-  kind: "addon.message";
-  addon: string;
-  version: string;
-  createdAt: number;
-  payload: unknown;
-}
-
-export type MessageEnvelope = CoreMessageEnvelope | AddonMessageEnvelope;
+export {
+  EnvelopeValidationError,
+  tryParseAddonEnvelope,
+  validateAddonEnvelope,
+} from "./envelope.js";
+export type {
+  AddonMessageEnvelope,
+  CoreMessageEnvelope,
+  MessageEnvelope,
+} from "./envelope.js";
 
 export interface HelloMessage {
   type: "hello";

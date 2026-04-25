@@ -13,6 +13,7 @@
     "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@senn/addon-runtime": "workspace:*",
     "@senn/core": "workspace:*",
     "@senn/protocol": "workspace:*",
     "@senn/signaling-url-fragment": "workspace:*",

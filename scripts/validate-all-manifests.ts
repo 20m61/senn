@@ -13,7 +13,12 @@ import { ManifestValidationError, validateManifestFile } from "./lib/manifest.js
 // Scripts are invoked from the workspace root via pnpm, so cwd is the repo root.
 const ROOT = process.cwd();
 
-const SCAN_ROOTS: readonly string[] = ["addons/official", "addons/community", "examples"];
+const SCAN_ROOTS: readonly string[] = [
+  "addons/official",
+  "addons/community",
+  "examples",
+  "apps/web/public/addons",
+];
 
 async function findManifests(dir: string): Promise<string[]> {
   let entries: Awaited<ReturnType<typeof readdir>>;

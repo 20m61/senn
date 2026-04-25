@@ -1,6 +1,355 @@
+/**
+ * @senn/addon-runtime — host side of the SENN add-on runtime.
+ *
+ * Spec: docs/addon-runtime-spec.md.
+ *
+ * Loads a static add-on into a sandboxed iframe, validates its manifest,
+ * and exchanges typed bridge messages over postMessage. Optionally binds
+ * to a PeerSession so add-on `send` ops are wrapped into AddonMessage
+ * envelopes and forwarded to the remote peer.
+ */
+
+import {
+  type AddonMessageEnvelope,
+  tryParseAddonEnvelope,
+  validateAddonEnvelope,
+} from "@senn/protocol";
+
+/**
+ * Minimal duck-typed contract that AddonHost needs from a transport.
+ * @senn/core's PeerSession satisfies this structurally; addon-runtime
+ * stays free of any dependency on @senn/core.
+ */
+export interface AddonPeerLink {
+  on(event: "text", handler: (text: string) => void): () => void;
+  sendText(message: string): Promise<void>;
+}
+
 export const SENN_ADDON_RUNTIME_VERSION = "0.0.0";
+export const ADDON_BRIDGE_KIND = "senn.addon.v1" as const;
+
+export type AddonHostState = "created" | "mounted" | "initialized" | "active" | "closed";
+
+export type AddonBridgeMessage =
+  | {
+      kind: typeof ADDON_BRIDGE_KIND;
+      op: "init";
+      addonId: string;
+      version: string;
+      sessionId: string;
+    }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "ready" }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "send"; payload: unknown }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "deliver"; payload: unknown; from?: string }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "error"; message: string };
+
+export interface AddonManifest {
+  readonly id: string;
+  readonly name: string;
+  readonly version: string;
+  readonly entry: string;
+  readonly license: string;
+  readonly network: false;
+  readonly permissions: readonly string[];
+  readonly capabilities: readonly string[];
+}
+
+export class AddonValidationError extends Error {
+  constructor(message: string) {
+    super(`senn: addon validation failed — ${message}`);
+    this.name = "AddonValidationError";
+  }
+}
+
+export interface AddonHostEvents {
+  state: AddonHostState;
+  send: unknown; // payload the add-on asked to send
+  error: Error;
+}
 
 export interface AddonHostOptions {
   readonly manifestUrl: string;
-  readonly sandbox?: readonly string[];
+  readonly container: HTMLElement;
+  readonly session?: AddonPeerLink;
+  /** Override fetch (used by tests). */
+  readonly fetcher?: typeof fetch;
+}
+
+const ADDON_ID_PATTERN = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
+const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const KNOWN_PERMISSIONS: ReadonlySet<string> = new Set([
+  "peer.send",
+  "peer.receive",
+  "storage.local.read",
+  "storage.local.write",
+  "file.read.user_selected",
+  "file.write.user_approved",
+  "ui.panel",
+  "ui.overlay",
+  "presence.read",
+  "audio.level",
+]);
+
+function asObject(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new AddonValidationError(`${label} is not an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function validateManifest(value: unknown): AddonManifest {
+  const obj = asObject(value, "manifest");
+  if (typeof obj.id !== "string" || !ADDON_ID_PATTERN.test(obj.id))
+    throw new AddonValidationError("id must match reverse-DNS");
+  if (typeof obj.name !== "string" || obj.name.length === 0)
+    throw new AddonValidationError("name must be non-empty string");
+  if (typeof obj.version !== "string" || !SEMVER_PATTERN.test(obj.version))
+    throw new AddonValidationError("version must be SemVer");
+  if (typeof obj.entry !== "string" || obj.entry.length === 0)
+    throw new AddonValidationError("entry must be non-empty string");
+  if (typeof obj.license !== "string" || obj.license.length === 0)
+    throw new AddonValidationError("license must be non-empty string");
+  if (obj.network !== false) throw new AddonValidationError("network must be false");
+  if (!Array.isArray(obj.permissions)) throw new AddonValidationError("permissions must be array");
+  for (const perm of obj.permissions) {
+    if (typeof perm !== "string" || !KNOWN_PERMISSIONS.has(perm)) {
+      throw new AddonValidationError(`unknown permission: ${String(perm)}`);
+    }
+  }
+  if (!Array.isArray(obj.capabilities) || obj.capabilities.length === 0)
+    throw new AddonValidationError("capabilities must be non-empty array");
+
+  return {
+    id: obj.id,
+    name: obj.name,
+    version: obj.version,
+    entry: obj.entry,
+    license: obj.license,
+    network: false,
+    permissions: [...(obj.permissions as string[])],
+    capabilities: [...(obj.capabilities as string[])],
+  };
+}
+
+function isBridgeMessage(value: unknown): value is AddonBridgeMessage {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as { kind?: unknown; op?: unknown };
+  if (v.kind !== ADDON_BRIDGE_KIND) return false;
+  return typeof v.op === "string";
+}
+
+let counter = 0;
+function newEnvelopeId(): string {
+  counter = (counter + 1) % 0xffffff;
+  return `addon_${Date.now().toString(36)}_${counter.toString(36)}`;
+}
+
+type Listener<T> = (value: T) => void;
+
+export class AddonHost {
+  readonly manifest: AddonManifest;
+  readonly manifestUrl: URL;
+  readonly entryUrl: URL;
+  readonly sessionId: string;
+
+  private readonly container: HTMLElement;
+  private readonly session: AddonPeerLink | null;
+  private iframe: HTMLIFrameElement | null = null;
+  private currentState: AddonHostState = "created";
+  private detachPeer: (() => void) | null = null;
+  private readonly listeners: {
+    [K in keyof AddonHostEvents]: Set<Listener<AddonHostEvents[K]>>;
+  } = { state: new Set(), send: new Set(), error: new Set() };
+  private readonly windowMessageHandler: (ev: MessageEvent) => void;
+
+  private constructor(opts: AddonHostOptions, manifest: AddonManifest, manifestUrl: URL) {
+    this.manifest = manifest;
+    this.manifestUrl = manifestUrl;
+    this.entryUrl = new URL(manifest.entry, manifestUrl);
+    this.container = opts.container;
+    this.session = opts.session ?? null;
+    this.sessionId = newEnvelopeId();
+    this.windowMessageHandler = (ev) => this.handleWindowMessage(ev);
+  }
+
+  static async load(opts: AddonHostOptions): Promise<AddonHost> {
+    const fetcher = opts.fetcher ?? globalThis.fetch.bind(globalThis);
+    const manifestUrl = new URL(
+      opts.manifestUrl,
+      globalThis.location?.href ?? "http://senn.invalid/",
+    );
+    const res = await fetcher(manifestUrl);
+    if (!res.ok) {
+      throw new AddonValidationError(`fetch ${manifestUrl} returned ${res.status}`);
+    }
+    const json = await res.json();
+    const manifest = validateManifest(json);
+    const host = new AddonHost(opts, manifest, manifestUrl);
+    host.mount();
+    if (host.session) host.bindToSession(host.session);
+    return host;
+  }
+
+  get state(): AddonHostState {
+    return this.currentState;
+  }
+
+  on<K extends keyof AddonHostEvents>(event: K, handler: Listener<AddonHostEvents[K]>): () => void {
+    this.listeners[event].add(handler);
+    return () => {
+      this.listeners[event].delete(handler);
+    };
+  }
+
+  /** Push a payload to the add-on. Requires the add-on to declare `peer.receive`. */
+  async deliver(payload: unknown, from?: string): Promise<void> {
+    if (this.currentState !== "active") {
+      throw new Error(`AddonHost.deliver() called in state ${this.currentState}`);
+    }
+    if (!this.manifest.permissions.includes("peer.receive")) {
+      throw new Error("addon manifest does not declare peer.receive");
+    }
+    this.postToIframe(
+      from === undefined
+        ? { kind: ADDON_BRIDGE_KIND, op: "deliver", payload }
+        : { kind: ADDON_BRIDGE_KIND, op: "deliver", payload, from },
+    );
+  }
+
+  async close(): Promise<void> {
+    if (this.currentState === "closed") return;
+    this.setState("closed");
+    globalThis.removeEventListener?.("message", this.windowMessageHandler);
+    this.detachPeer?.();
+    this.detachPeer = null;
+    if (this.iframe) {
+      this.iframe.remove();
+      this.iframe = null;
+    }
+  }
+
+  // ── internals ────────────────────────────────────────────────────────────
+
+  private mount(): void {
+    const iframe = document.createElement("iframe");
+    iframe.sandbox.add("allow-scripts");
+    iframe.referrerPolicy = "no-referrer";
+    iframe.title = `SENN add-on: ${this.manifest.name}`;
+    iframe.src = this.entryUrl.toString();
+    iframe.addEventListener("load", () => this.onIframeLoad(), { once: true });
+    this.container.appendChild(iframe);
+    this.iframe = iframe;
+    this.setState("mounted");
+    globalThis.addEventListener("message", this.windowMessageHandler);
+  }
+
+  private onIframeLoad(): void {
+    if (this.currentState !== "mounted") return;
+    this.setState("initialized");
+    this.postToIframe({
+      kind: ADDON_BRIDGE_KIND,
+      op: "init",
+      addonId: this.manifest.id,
+      version: this.manifest.version,
+      sessionId: this.sessionId,
+    });
+  }
+
+  private ensureInitPosted(): void {
+    // If "ready" arrived before the iframe's load event, we still want to
+    // deliver init; otherwise the add-on never sees its own id/version.
+    if (this.currentState === "mounted") {
+      this.setState("initialized");
+      this.postToIframe({
+        kind: ADDON_BRIDGE_KIND,
+        op: "init",
+        addonId: this.manifest.id,
+        version: this.manifest.version,
+        sessionId: this.sessionId,
+      });
+    }
+  }
+
+  private postToIframe(message: AddonBridgeMessage): void {
+    const target = this.iframe?.contentWindow;
+    if (!target) return;
+    // Sandboxed iframe has an opaque origin, so "*" is required and acceptable
+    // here — the iframe is the only window the host is talking to from this
+    // contentWindow reference, and the add-on never trusts inbound messages
+    // either (it relies on the bridge protocol shape).
+    target.postMessage(message, "*");
+  }
+
+  private handleWindowMessage(ev: MessageEvent): void {
+    if (!this.iframe || ev.source !== this.iframe.contentWindow) return;
+    if (!isBridgeMessage(ev.data)) return;
+    const msg = ev.data;
+    switch (msg.op) {
+      case "ready":
+        // ready may arrive before or after the iframe's load event; ensure
+        // init is posted regardless, then transition to active.
+        this.ensureInitPosted();
+        if (this.currentState === "initialized") this.setState("active");
+        return;
+      case "send":
+        this.handleSend(msg.payload);
+        return;
+      case "error":
+        this.emit("error", new Error(`addon: ${msg.message}`));
+        return;
+      default:
+        // init / deliver are host → iframe ops; ignore if echoed back.
+        return;
+    }
+  }
+
+  private handleSend(payload: unknown): void {
+    if (!this.manifest.permissions.includes("peer.send")) {
+      this.emit("error", new Error("addon attempted send without peer.send permission"));
+      return;
+    }
+    this.emit("send", payload);
+    if (this.session) {
+      const envelope: AddonMessageEnvelope = {
+        id: newEnvelopeId(),
+        kind: "addon.message",
+        addon: this.manifest.id,
+        version: this.manifest.version,
+        createdAt: Date.now(),
+        payload,
+      };
+      // Validate before serialization just to catch shape drift early.
+      validateAddonEnvelope(envelope);
+      void this.session.sendText(JSON.stringify(envelope)).catch((err) => {
+        this.emit("error", err as Error);
+      });
+    }
+  }
+
+  private bindToSession(session: AddonPeerLink): void {
+    this.detachPeer = session.on("text", (json) => {
+      const envelope = tryParseAddonEnvelope(json);
+      if (!envelope) return;
+      if (envelope.addon !== this.manifest.id) return;
+      void this.deliver(envelope.payload, envelope.addon).catch((err) => {
+        this.emit("error", err as Error);
+      });
+    });
+  }
+
+  private setState(next: AddonHostState): void {
+    if (this.currentState === next) return;
+    this.currentState = next;
+    this.emit("state", next);
+  }
+
+  private emit<K extends keyof AddonHostEvents>(event: K, value: AddonHostEvents[K]): void {
+    for (const handler of this.listeners[event]) {
+      try {
+        handler(value);
+      } catch (err) {
+        console.error("senn: addon-host listener threw", err);
+      }
+    }
+  }
 }

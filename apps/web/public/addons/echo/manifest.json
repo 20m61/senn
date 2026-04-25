@@ -1,0 +1,12 @@
+{
+  "id": "dev.senn.echo",
+  "name": "Echo",
+  "version": "0.1.0",
+  "description": "Echoes any payload it receives, prefixed with 'echo:'.",
+  "entry": "index.html",
+  "license": "Apache-2.0",
+  "author": "SENN Project",
+  "network": false,
+  "permissions": ["peer.send", "peer.receive", "ui.panel"],
+  "capabilities": ["echo-v1"]
+}

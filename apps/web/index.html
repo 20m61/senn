@@ -64,6 +64,22 @@
         <h3>Log</h3>
         <ul id="inbox" class="inbox"></ul>
       </section>
+
+      <section class="demo">
+        <h2>Echo add-on (sandboxed iframe)</h2>
+        <p class="muted">
+          Once the data channel is <code>connected</code>, click
+          <strong>load echo add-on</strong>. The add-on runs in a
+          <code>sandbox="allow-scripts"</code> iframe and reaches Core only through the
+          postMessage bridge. Anything it sends is wrapped in an <code>addon.message</code>
+          envelope and forwarded over <code>core.text</code> to the peer's instance.
+        </p>
+        <div class="row">
+          <button id="btn-load-addon">load echo add-on</button>
+          <span class="muted">addon state: <span id="addon-state" class="mono">none</span></span>
+        </div>
+        <div id="addon-mount" class="addon-mount"></div>
+      </section>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

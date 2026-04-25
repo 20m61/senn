@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'none'; frame-ancestors 'self'"
+    />
+    <title>Echo Add-on</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Echo</h1>
+      <p>state: <span id="state">booting</span></p>
+      <ul id="log"></ul>
+      <!-- Use button[type=button] + click handler. <form> would require
+           sandbox="allow-forms" which the SENN runtime intentionally
+           withholds from add-ons. -->
+      <div id="emit-row" class="emit">
+        <input id="emit-input" type="text" placeholder="payload to send" />
+        <button id="emit-button" type="button">send</button>
+      </div>
+    </main>
+    <!--
+      Loaded as a classic script (no type="module"). A sandboxed iframe
+      without allow-same-origin runs with an opaque origin; ES module fetches
+      are CORS-checked against that origin and blocked unless the static
+      host adds Access-Control-Allow-Origin headers, which a generic CDN may
+      not. Classic scripts work without CORS preflight.
+    -->
+    <script src="addon.js"></script>
+  </body>
+</html>

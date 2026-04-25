@@ -1,3 +1,4 @@
+import { AddonHost } from "@senn/addon-runtime";
 import { PeerSession, SENN_CORE_VERSION } from "@senn/core";
 import {
   type InvitePayload,
@@ -187,6 +188,42 @@ document.querySelector<HTMLButtonElement>("#btn-send-text")?.addEventListener("c
     log(`send error: ${(err as Error).message}`);
   }
 });
+
+let addonHost: AddonHost | null = null;
+const addonStateLabel = document.querySelector<HTMLSpanElement>("#addon-state");
+const addonMount = document.querySelector<HTMLElement>("#addon-mount");
+
+document
+  .querySelector<HTMLButtonElement>("#btn-load-addon")
+  ?.addEventListener("click", async () => {
+    if (addonHost) return;
+    if (!addonMount) return;
+    try {
+      const host = await AddonHost.load(
+        session
+          ? {
+              manifestUrl: "/addons/echo/manifest.json",
+              container: addonMount,
+              session,
+            }
+          : {
+              manifestUrl: "/addons/echo/manifest.json",
+              container: addonMount,
+            },
+      );
+      addonHost = host;
+      if (addonStateLabel) addonStateLabel.textContent = host.state;
+      host.on("state", (s) => {
+        if (addonStateLabel) addonStateLabel.textContent = s;
+        log(`addon: ${s}`);
+      });
+      host.on("send", (payload) => log(`addon -> peers: ${JSON.stringify(payload).slice(0, 80)}`));
+      host.on("error", (err) => log(`addon error: ${err.message}`));
+      log(`addon loaded: ${host.manifest.id} v${host.manifest.version}`);
+    } catch (err) {
+      log(`addon load error: ${(err as Error).message}`);
+    }
+  });
 
 async function consumeUrl(href: string): Promise<void> {
   if (href.includes("#") && href.includes("i=")) {
