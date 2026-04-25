@@ -1,0 +1,18 @@
+{
+  "id": "dev.senn.whiteboard",
+  "name": "Whiteboard",
+  "version": "0.1.0",
+  "description": "Shared whiteboard. Strokes flow P2P; the canvas snapshot is local-first.",
+  "entry": "index.html",
+  "license": "Apache-2.0",
+  "author": "SENN Project",
+  "network": false,
+  "permissions": [
+    "peer.send",
+    "peer.receive",
+    "storage.local.read",
+    "storage.local.write",
+    "ui.panel"
+  ],
+  "capabilities": ["whiteboard-v1"]
+}

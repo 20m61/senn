@@ -195,39 +195,45 @@ let addonHost: AddonHost | null = null;
 const addonStateLabel = document.querySelector<HTMLSpanElement>("#addon-state");
 const addonMount = document.querySelector<HTMLElement>("#addon-mount");
 
+async function loadAddonByManifest(manifestUrl: string): Promise<void> {
+  if (addonHost) return;
+  if (!addonMount) return;
+  try {
+    const host = await AddonHost.load(
+      session
+        ? {
+            manifestUrl,
+            container: addonMount,
+            session,
+            storage: addonStorageBackend,
+          }
+        : {
+            manifestUrl,
+            container: addonMount,
+            storage: addonStorageBackend,
+          },
+    );
+    addonHost = host;
+    if (addonStateLabel) addonStateLabel.textContent = host.state;
+    host.on("state", (s) => {
+      if (addonStateLabel) addonStateLabel.textContent = s;
+      log(`addon: ${s}`);
+    });
+    host.on("send", (payload) => log(`addon -> peers: ${JSON.stringify(payload).slice(0, 80)}`));
+    host.on("error", (err) => log(`addon error: ${err.message}`));
+    log(`addon loaded: ${host.manifest.id} v${host.manifest.version}`);
+  } catch (err) {
+    log(`addon load error: ${(err as Error).message}`);
+  }
+}
+
 document
   .querySelector<HTMLButtonElement>("#btn-load-addon")
-  ?.addEventListener("click", async () => {
-    if (addonHost) return;
-    if (!addonMount) return;
-    try {
-      const host = await AddonHost.load(
-        session
-          ? {
-              manifestUrl: "/addons/echo/manifest.json",
-              container: addonMount,
-              session,
-              storage: addonStorageBackend,
-            }
-          : {
-              manifestUrl: "/addons/echo/manifest.json",
-              container: addonMount,
-              storage: addonStorageBackend,
-            },
-      );
-      addonHost = host;
-      if (addonStateLabel) addonStateLabel.textContent = host.state;
-      host.on("state", (s) => {
-        if (addonStateLabel) addonStateLabel.textContent = s;
-        log(`addon: ${s}`);
-      });
-      host.on("send", (payload) => log(`addon -> peers: ${JSON.stringify(payload).slice(0, 80)}`));
-      host.on("error", (err) => log(`addon error: ${err.message}`));
-      log(`addon loaded: ${host.manifest.id} v${host.manifest.version}`);
-    } catch (err) {
-      log(`addon load error: ${(err as Error).message}`);
-    }
-  });
+  ?.addEventListener("click", () => loadAddonByManifest("/addons/echo/manifest.json"));
+
+document
+  .querySelector<HTMLButtonElement>("#btn-load-whiteboard")
+  ?.addEventListener("click", () => loadAddonByManifest("/addons/whiteboard/manifest.json"));
 
 async function consumeUrl(href: string): Promise<void> {
   if (href.includes("#") && href.includes("i=")) {

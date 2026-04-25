@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'none'; frame-ancestors 'self'"
+    />
+    <title>Whiteboard Add-on</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Whiteboard</h1>
+      <p>state: <span id="state">booting</span></p>
+      <div id="counters">
+        <span>own strokes: <span id="own-strokes">0</span></span>
+        ·
+        <span>peer strokes: <span id="peer-strokes">0</span></span>
+      </div>
+      <canvas id="board" width="320" height="180"></canvas>
+      <div class="row">
+        <button id="btn-demo" type="button">demo line</button>
+        <button id="btn-clear" type="button">clear local</button>
+        <button id="btn-save" type="button">save snapshot</button>
+        <button id="btn-load" type="button">load snapshot</button>
+      </div>
+      <p>vault: <span id="vault-state">empty</span></p>
+    </main>
+    <script src="addon.js"></script>
+  </body>
+</html>
