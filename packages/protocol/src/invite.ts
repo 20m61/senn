@@ -7,6 +7,13 @@
  * URL form:     <https origin and path>#i=<encoded>
  */
 
+import {
+  SIGNALING_BUNDLE_FRAGMENT_KEY,
+  type SignalingBundleV1,
+  decodeSignalingBundle,
+  encodeSignalingBundle,
+  validateSignalingBundle,
+} from "./bundle.js";
 import { type PeerId, type RoomId, isPeerId, isRoomId } from "./ids.js";
 
 export const INVITE_PAYLOAD_VERSION = 1 as const;
@@ -143,6 +150,92 @@ export async function parseInviteUrl(href: string): Promise<InvitePayload> {
   const encoded = params.get(INVITE_FRAGMENT_KEY);
   if (!encoded) throw new InviteValidationError("missing #i= fragment");
   return decodeInvite(encoded);
+}
+
+/**
+ * Build a combined invite-and-bundle URL (`#i=…&s=…`).
+ *
+ * The bundle's `roomId` MUST equal the invite's `roomId`. Every message's
+ * `from` MUST match the invite's `from` (the inviter is the only declared
+ * peer at this hop; additional peers are introduced via subsequent bundles).
+ */
+export async function buildInviteBundleUrl(
+  baseUrl: string,
+  invite: InvitePayload,
+  bundle: SignalingBundleV1,
+): Promise<string> {
+  validateInvitePayload(invite);
+  validateSignalingBundle(bundle);
+  if (bundle.roomId !== invite.roomId) {
+    throw new InviteValidationError("bundle.roomId must equal invite.roomId");
+  }
+  for (const msg of bundle.messages) {
+    if (msg.from !== invite.from) {
+      throw new InviteValidationError(
+        "every bundle message.from must equal invite.from on the first hop",
+      );
+    }
+  }
+  const url = new URL(baseUrl);
+  if (url.protocol !== "https:" && url.protocol !== "file:") {
+    throw new InviteValidationError(`invite scheme must be https or file, got ${url.protocol}`);
+  }
+  const inviteEncoded = await encodeInvite(invite);
+  const bundleEncoded = await encodeSignalingBundle(bundle);
+  url.hash = `${INVITE_FRAGMENT_KEY}=${inviteEncoded}&${SIGNALING_BUNDLE_FRAGMENT_KEY}=${bundleEncoded}`;
+  const result = url.toString();
+  if (result.length > INVITE_URL_MAX_LENGTH) {
+    throw new InviteValidationError(
+      `invite+bundle URL exceeds ${INVITE_URL_MAX_LENGTH} chars (${result.length})`,
+    );
+  }
+  return result;
+}
+
+export interface ParsedInviteBundle {
+  readonly invite: InvitePayload;
+  readonly bundle: SignalingBundleV1 | null;
+}
+
+/**
+ * Parse a URL that carries `#i=…` and optionally `&s=…`.
+ *
+ * Unknown fragment keys are rejected. When a bundle is present the
+ * roomId-match and from-match invariants defined in
+ * docs/room-and-invite-spec.md are enforced.
+ */
+export async function parseInviteBundleUrl(href: string): Promise<ParsedInviteBundle> {
+  const url = new URL(href);
+  const fragment = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  const params = new URLSearchParams(fragment);
+
+  for (const key of params.keys()) {
+    if (key !== INVITE_FRAGMENT_KEY && key !== SIGNALING_BUNDLE_FRAGMENT_KEY) {
+      throw new InviteValidationError(`unknown fragment key: ${key}`);
+    }
+  }
+
+  const inviteEncoded = params.get(INVITE_FRAGMENT_KEY);
+  if (!inviteEncoded) throw new InviteValidationError("missing #i= fragment");
+  const invite = await decodeInvite(inviteEncoded);
+
+  const bundleEncoded = params.get(SIGNALING_BUNDLE_FRAGMENT_KEY);
+  let bundle: SignalingBundleV1 | null = null;
+  if (bundleEncoded) {
+    bundle = await decodeSignalingBundle(bundleEncoded);
+    if (bundle.roomId !== invite.roomId) {
+      throw new InviteValidationError("bundle.roomId does not match invite.roomId");
+    }
+    for (const msg of bundle.messages) {
+      if (msg.from !== invite.from) {
+        throw new InviteValidationError(
+          "bundle message.from does not match invite.from on the first hop",
+        );
+      }
+    }
+  }
+
+  return { invite, bundle };
 }
 
 // ---------------------------------------------------------------------------

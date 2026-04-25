@@ -18,8 +18,11 @@
       <section class="demo">
         <h2>Tier 0 signaling demo</h2>
         <p class="muted">
-          Open this page in two tabs. Use one tab as <strong>inviter</strong>, the other as
-          <strong>joiner</strong>. Bundles travel via copy-paste — no server is contacted.
+          Open this page in two tabs. On the <strong>inviter</strong> tab: create a room, publish
+          an <code>offer</code>, export — the URL will carry both <code>#i=…&amp;s=…</code>. Open
+          that URL in the second tab (<strong>joiner</strong>); it auto-joins and consumes the
+          offer. The joiner then publishes an <code>answer</code> and exports a reply URL
+          (<code>#s=…</code>) to paste back. No server is contacted.
         </p>
 
         <div class="row">
@@ -29,7 +32,7 @@
 
         <div class="row">
           <label>
-            ② Compose a signaling message and send it:
+            ② Compose a signaling message:
             <select id="msg-kind">
               <option value="offer">offer</option>
               <option value="answer">answer</option>
@@ -38,20 +41,20 @@
             </select>
           </label>
           <button id="btn-publish">publish</button>
-          <button id="btn-export">export bundle URL</button>
+          <button id="btn-export">export URL</button>
         </div>
 
         <textarea id="export-out" rows="3" readonly placeholder="exported URL appears here"></textarea>
 
         <div class="row">
           <label class="grow">
-            ③ Paste a bundle URL from the other tab:
-            <input id="import-in" type="text" placeholder="https://…/#s=…" />
+            ③ Paste a URL from the other tab:
+            <input id="import-in" type="text" placeholder="https://…/#i=…&amp;s=…" />
           </label>
           <button id="btn-import">import</button>
         </div>
 
-        <h3>Inbox</h3>
+        <h3>Log</h3>
         <ul id="inbox" class="inbox"></ul>
       </section>
     </main>

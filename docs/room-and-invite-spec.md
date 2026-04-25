@@ -76,9 +76,30 @@ https://<host>/<path>#i=<base64url-deflate-raw-utf8-json>
 ```
 
 - The scheme MUST be `https` (or `file://` for local-only test fixtures).
-- The fragment key MUST be `i`. Other keys are reserved for future use.
+- The fragment key for the invite payload MUST be `i`.
 - The fragment value MUST decode to a valid `InvitePayload`.
 - QR codes MUST encode the full URL.
+
+### Combined invite + initial signaling bundle
+
+The first-hop URL MAY additionally carry an initial signaling bundle
+([`signaling-url-fragment-spec.md`](signaling-url-fragment-spec.md)) under
+fragment key `s`:
+
+```
+https://<host>/<path>#i=<invite>&s=<bundle>
+```
+
+When both are present:
+
+- The decoder MUST validate both payloads independently.
+- The decoder MUST reject the URL if `bundle.roomId` ≠ `invite.roomId`.
+- The decoder MUST reject any bundle message whose `from` is neither the
+  invite's `from` nor a peer already known for that room.
+- Keys other than `i` and `s` in the fragment are reserved; decoders MUST
+  reject unknown fragment keys.
+- The total URL length constraint (≤ 2048 characters) applies to the
+  combined form.
 
 ## Positive example
 

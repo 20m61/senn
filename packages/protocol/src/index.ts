@@ -19,6 +19,7 @@ export {
 export type { PeerId, RoomId } from "./ids.js";
 
 export {
+  buildInviteBundleUrl,
   buildInviteUrl,
   decodeInvite,
   encodeInvite,
@@ -26,10 +27,11 @@ export {
   INVITE_PAYLOAD_VERSION,
   INVITE_URL_MAX_LENGTH,
   InviteValidationError,
+  parseInviteBundleUrl,
   parseInviteUrl,
   validateInvitePayload,
 } from "./invite.js";
-export type { InvitePayload } from "./invite.js";
+export type { InvitePayload, ParsedInviteBundle } from "./invite.js";
 
 export {
   BundleValidationError,

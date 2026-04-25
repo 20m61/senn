@@ -8,7 +8,6 @@
  */
 
 import { type RoomId, isPeerId, isRoomId } from "./ids.js";
-import { InviteValidationError } from "./invite.js";
 import type { SignalingMessage } from "./signaling.js";
 
 export const SIGNALING_BUNDLE_VERSION = 1 as const;
@@ -266,6 +265,3 @@ async function runStream(ts: GenericTransformStream, input: Uint8Array): Promise
   }
   return out;
 }
-
-// Re-export for callers that catch validation across both surfaces.
-export { InviteValidationError };
