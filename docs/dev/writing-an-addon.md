@@ -164,7 +164,67 @@ Add-on `index.html` then loads it as a classic script:
 
 `@senn/addon-sdk` is currently a workspace package (not yet published to
 npm); inside this repo you depend on it via `"@senn/addon-sdk":
-"workspace:*"`. A future ADR will own the public publish flow.
+"workspace:*"`. ADR-0019 owns the public publish flow.
+
+### Trying the SDK from an external project (pre-publish)
+
+Until `@senn/addon-sdk` ships to npm under the `@senn` scope (ADR-0019),
+external authors can still depend on the exact same artefacts via
+`pnpm pack`. This produces a tarball that mirrors what the future
+`pnpm publish` will produce, so the install path you exercise today is
+the install path users will run after publish — no rewrite needed.
+
+From a clone of `20m61/senn`:
+
+```sh
+pnpm install
+pnpm --filter @senn/addon-sdk build           # populates dist/
+pnpm --filter @senn/addon-sdk pack             # writes senn-addon-sdk-0.0.0.tgz
+```
+
+`pnpm pack` honours the `files` field documented in ADR-0018 §2, so the
+tarball contains `dist/`, `runtime/`, `src/`, and `package.json`. Verify
+it does:
+
+```sh
+tar -tzf packages/addon-sdk/senn-addon-sdk-0.0.0.tgz | sort
+# package/LICENSE
+# package/dist/index.d.ts
+# package/dist/index.d.ts.map
+# package/dist/index.js
+# package/dist/index.js.map
+# package/package.json
+# package/runtime/senn-addon-sdk.d.ts
+# package/runtime/senn-addon-sdk.js
+# package/src/index.ts
+```
+
+In your external add-on project, install the tarball directly:
+
+```sh
+cd path/to/your-addon
+pnpm add -D /absolute/path/to/senn-addon-sdk-0.0.0.tgz
+# or, if you prefer not to copy the path:
+pnpm add -D file:../senn/packages/addon-sdk/senn-addon-sdk-0.0.0.tgz
+```
+
+The TypeScript and runtime-copy snippets above work unchanged: the
+`/// <reference types="@senn/addon-sdk" />` directive resolves into
+`dist/index.d.ts` from the tarball, and
+`require.resolve("@senn/addon-sdk/runtime/senn-addon-sdk.js")` resolves
+into `runtime/senn-addon-sdk.js` from the tarball.
+
+When ADR-0019 lands the published package, drop the tarball line and
+switch to:
+
+```sh
+pnpm add -D @senn/addon-sdk
+```
+
+No code change is required in `addon.ts` or your build script; the
+import / reference paths are identical between tarball and registry
+installs by design (this is the whole point of the ADR-0018 package
+shape).
 
 ## Forbidden APIs (MUST NOT call)
 
