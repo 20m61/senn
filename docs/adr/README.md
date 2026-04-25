@@ -42,3 +42,4 @@ Proposed | Accepted | Superseded by ADR-XXXX | Deprecated
 | 0015 | [Cross-peer media tracks (audio + video)](0015-media-tracks.md) | Implemented |
 | 0016 | [Add-on gallery — discovery, trust display, install hand-off](0016-addon-gallery.md) | Accepted (design only) |
 | 0017 | [Registry schema v2 — categorisation, deprecation, meta-registries](0017-registry-schema-v2.md) | Accepted (design only) |
+| 0018 | [Add-on SDK type distribution](0018-addon-sdk-types.md) | Accepted |
