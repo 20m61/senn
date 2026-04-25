@@ -168,6 +168,32 @@ button.secondary {
   border: 1px solid #ef4444;
 }
 
+.badge-featured {
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.list li {
+  /* meta-index rows render an inner <ul.meta-errors>, so loosen the
+     space-between layout when the left column grows past one line. */
+  align-items: flex-start;
+}
+
+.meta-errors {
+  list-style: disc inside;
+  padding: 0;
+  margin: 0.25rem 0 0;
+}
+
+.meta-errors li {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  display: list-item;
+}
+
 .cards .head {
   display: flex;
   justify-content: space-between;

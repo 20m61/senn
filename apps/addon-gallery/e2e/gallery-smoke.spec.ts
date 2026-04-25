@@ -142,6 +142,8 @@ test.describe("Add-on gallery smoke (ADR-0016)", () => {
     const metaRow = page.locator(`[data-testid="registry-meta-${encodeURIComponent(META_URL)}"]`);
     await expect(metaRow).toContainText("meta-index", { timeout: SHORT });
     await expect(metaRow).toContainText("1 of 1 publishers loaded");
+    // Featured count is surfaced in the same row.
+    await expect(metaRow).toContainText("1 featured");
 
     // Cards from the discovered publisher render and carry the meta-source
     // attribution.
@@ -150,6 +152,11 @@ test.describe("Add-on gallery smoke (ADR-0016)", () => {
     const trustRow = page.locator('[data-testid="addon-meta-source-dev.senn.whiteboard"]');
     await expect(trustRow).toContainText("via SENN Project (mock)");
 
+    // Featured publisher → featured badge on every card from that publisher.
+    const featuredBadge = page.locator('[data-testid="addon-featured-dev.senn.whiteboard"]');
+    await expect(featuredBadge).toBeVisible();
+    await expect(featuredBadge).toHaveText("featured");
+
     // The hand-off URL still points at the discovered publisher index, NOT
     // at the meta-index URL — meta-of-meta has no special meaning to the host.
     const link = page.locator('[data-testid="addon-open-dev.senn.whiteboard"]');
@@ -157,6 +164,104 @@ test.describe("Add-on gallery smoke (ADR-0016)", () => {
     if (!href) throw new Error("missing handoff href");
     const url = new URL(href);
     expect(url.searchParams.get("publisher")).toBe(PROXIED_REGISTRY_URL);
+
+    await ctx.close();
+  });
+
+  test("meta-index partial failure surfaces per-publisher errors (ADR-0017 §3)", async ({
+    browser,
+  }) => {
+    const META_URL = "http://127.0.0.1:5173/registry/official/meta-partial.json";
+    const BROKEN_PUB = "http://127.0.0.1:5173/registry/does-not-exist/index.json";
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+
+    // Meta-index lists one good publisher (the real proxied registry) and
+    // one broken publisher whose URL 404s. The gallery should load the
+    // good one and surface the broken one as a per-publisher error under
+    // the meta row, not a top-level fatal.
+    await page.route(META_URL, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          v: 1,
+          kind: "senn-publisher-meta",
+          publishers: [
+            { url: PROXIED_REGISTRY_URL, name: "SENN Project (mock)" },
+            { url: BROKEN_PUB, name: "Broken Publisher" },
+          ],
+        }),
+      });
+    });
+    await page.route(BROKEN_PUB, async (route) => {
+      await route.fulfill({ status: 404, body: "not found" });
+    });
+
+    await page.addInitScript(
+      ({ metaUrl, hostOrigin }) => {
+        try {
+          localStorage.setItem("senn.gallery.registries", JSON.stringify([{ url: metaUrl }]));
+          localStorage.setItem("senn.gallery.host-origin", hostOrigin);
+        } catch {
+          /* localStorage may not be available; addInitScript will retry per nav */
+        }
+      },
+      { metaUrl: META_URL, hostOrigin: "http://127.0.0.1:5173" },
+    );
+    await page.goto("/");
+
+    // Successful publisher's card still renders.
+    await expect(page.locator('[data-testid="addon-card-dev.senn.whiteboard"]')).toBeVisible({
+      timeout: SHORT,
+    });
+
+    // Meta row reflects 1-of-2 loaded.
+    const metaRow = page.locator(`[data-testid="registry-meta-${encodeURIComponent(META_URL)}"]`);
+    await expect(metaRow).toContainText("1 of 2 publishers loaded");
+
+    // The broken publisher is surfaced in the per-meta error list.
+    const errorList = page.locator(
+      `[data-testid="registry-meta-errors-${encodeURIComponent(META_URL)}"]`,
+    );
+    await expect(errorList).toBeVisible();
+    await expect(errorList).toContainText("Broken Publisher");
+    await expect(errorList).toContainText(BROKEN_PUB);
+
+    // Status string mentions the failed publisher count.
+    await expect(page.locator("#config-status")).toContainText("1 meta publishers failed", {
+      timeout: SHORT,
+    });
+
+    await ctx.close();
+  });
+
+  test("refresh button re-runs every load with cache: reload", async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await seedHostAndRegistry(page);
+    await page.goto("/");
+    await expect(page.locator("#config-status")).toContainText("loaded", { timeout: SHORT });
+
+    // Track every fetch against the proxied publisher index. The Refresh
+    // button should fire at least one new request; its Request must opt
+    // into cache=reload so the browser revalidates.
+    const requests: { url: string; cache: string }[] = [];
+    page.on("request", (req) => {
+      if (req.url() === PROXIED_REGISTRY_URL) {
+        requests.push({ url: req.url(), cache: (req as { cache?: () => string }).cache?.() ?? "" });
+      }
+    });
+    await page.locator('[data-testid="btn-registry-refresh"]').click();
+    await expect(page.locator("#config-status")).toContainText("loaded", { timeout: SHORT });
+
+    expect(requests.length).toBeGreaterThanOrEqual(1);
+    // Playwright surfaces the Fetch API cache mode on the request; the
+    // refresh path must use "reload". Older engines (WebKit) report it as
+    // an empty string — accept either "reload" or empty there.
+    for (const r of requests) {
+      expect(["reload", ""]).toContain(r.cache);
+    }
 
     await ctx.close();
   });

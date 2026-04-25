@@ -72,6 +72,7 @@ interface AddonRow {
   // the source meta URL the publisher was discovered through.
   readonly metaSourceUrl?: string;
   readonly metaSourceName?: string;
+  readonly metaFeatured?: boolean;
 }
 
 // ADR-0017 §3 — PublisherMetaIndexV1.
@@ -87,9 +88,17 @@ interface PublisherMetaIndexV1 {
   readonly publishers: readonly PublisherEntryV1[];
 }
 
+interface MetaPublisherError {
+  readonly url: string;
+  readonly name?: string;
+  readonly message: string;
+}
+
 interface MetaSummary {
   readonly url: string;
   readonly publisherCount: number;
+  readonly featuredCount: number;
+  readonly errors: readonly MetaPublisherError[];
 }
 
 const LS_REGISTRIES = "senn.gallery.registries";
@@ -174,14 +183,19 @@ function sigUrlFor(manifestUrl: string): string {
   return new URL("manifest.sig.json", manifestUrl).toString();
 }
 
+// Default RequestCache is "default" (browser obeys HTTP cache headers).
+// When the user clicks Refresh, every fetch in the run is forced to
+// revalidate via "reload" so stale entries do not persist.
+let currentCacheMode: RequestCache = "default";
+
 async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: "omit" });
+  const res = await fetch(url, { credentials: "omit", cache: currentCacheMode });
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
   return (await res.json()) as T;
 }
 
 async function fetchBytes(url: string): Promise<Uint8Array> {
-  const res = await fetch(url, { credentials: "omit" });
+  const res = await fetch(url, { credentials: "omit", cache: currentCacheMode });
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
   return new Uint8Array(await res.arrayBuffer());
 }
@@ -251,6 +265,7 @@ function isRegistry(value: unknown): value is RegistryV1 {
 interface LoadOptions {
   readonly metaSourceUrl?: string;
   readonly metaSourceName?: string;
+  readonly metaFeatured?: boolean;
 }
 
 async function loadPublisherIndex(
@@ -298,6 +313,7 @@ async function loadPublisherIndex(
           verifyResult,
           ...(opts.metaSourceUrl ? { metaSourceUrl: opts.metaSourceUrl } : {}),
           ...(opts.metaSourceName ? { metaSourceName: opts.metaSourceName } : {}),
+          ...(opts.metaFeatured ? { metaFeatured: true } : {}),
         };
       } catch (err) {
         return {
@@ -312,6 +328,7 @@ async function loadPublisherIndex(
           fetchError: (err as Error).message,
           ...(opts.metaSourceUrl ? { metaSourceUrl: opts.metaSourceUrl } : {}),
           ...(opts.metaSourceName ? { metaSourceName: opts.metaSourceName } : {}),
+          ...(opts.metaFeatured ? { metaFeatured: true } : {}),
         };
       }
     }),
@@ -331,38 +348,47 @@ async function loadFromUrl(url: string): Promise<LoadResult> {
   if (isMetaIndex(value)) {
     const meta = normalizeMetaIndex(value);
     type Resolved =
-      | { ok: true; url: string; registry: RegistryV1; addons: AddonRow[] }
-      | { ok: false; url: string; error: string };
+      | { ok: true; entry: PublisherEntryV1; registry: RegistryV1; addons: AddonRow[] }
+      | { ok: false; entry: PublisherEntryV1; error: string };
     const results: Resolved[] = await Promise.all(
       meta.publishers.map(async (entry): Promise<Resolved> => {
         try {
           const { registry, addons } = await loadPublisherIndex(entry.url, {
             metaSourceUrl: url,
             ...(entry.name ? { metaSourceName: entry.name } : {}),
+            ...(entry.featured ? { metaFeatured: true } : {}),
           });
-          return { ok: true, url: entry.url, registry, addons };
+          return { ok: true, entry, registry, addons };
         } catch (err) {
-          return { ok: false, url: entry.url, error: (err as Error).message };
+          return { ok: false, entry, error: (err as Error).message };
         }
       }),
     );
     const registries: Array<{ url: string; registry: RegistryV1 }> = [];
     const addons: AddonRow[] = [];
-    const errors: string[] = [];
+    const errors: MetaPublisherError[] = [];
     for (const r of results) {
       if (r.ok) {
-        registries.push({ url: r.url, registry: r.registry });
+        registries.push({ url: r.entry.url, registry: r.registry });
         addons.push(...r.addons);
       } else {
-        errors.push(`${r.url}: ${r.error}`);
+        errors.push({
+          url: r.entry.url,
+          ...(r.entry.name ? { name: r.entry.name } : {}),
+          message: r.error,
+        });
       }
     }
     if (registries.length === 0) {
-      throw new Error(
-        `meta-index at ${url} resolved no publishers (${errors.join("; ") || "no entries"})`,
-      );
+      const detail = errors.map((e) => `${e.url}: ${e.message}`).join("; ");
+      throw new Error(`meta-index at ${url} resolved no publishers (${detail || "no entries"})`);
     }
-    return { registries, addons, meta: { url, publisherCount: meta.publishers.length } };
+    const featuredCount = meta.publishers.reduce((n, p) => n + (p.featured ? 1 : 0), 0);
+    return {
+      registries,
+      addons,
+      meta: { url, publisherCount: meta.publishers.length, featuredCount, errors },
+    };
   }
   if (!isRegistry(value)) throw new Error(`registry schema invalid: ${url}`);
   const registry = value;
@@ -464,7 +490,9 @@ function renderRegistryList(): void {
         .filter((r) => r.metaSourceUrl === entry.url)
         .reduce((acc, r) => acc.add(r.registryUrl), new Set<string>());
       meta.dataset.testid = `registry-meta-${encodeURIComponent(entry.url)}`;
-      meta.textContent = `meta-index · ${expanded.size} of ${metaSummary.publisherCount} publishers loaded`;
+      const featuredTail =
+        metaSummary.featuredCount > 0 ? ` · ${metaSummary.featuredCount} featured` : "";
+      meta.textContent = `meta-index · ${expanded.size} of ${metaSummary.publisherCount} publishers loaded${featuredTail}`;
     } else if (reg) {
       meta.textContent = `${reg.publisher.name} · ${reg.addons.length} addons · key ${fingerprintKey(reg.trustedKeys[0] ?? "")}`;
     } else if (err) {
@@ -473,6 +501,18 @@ function renderRegistryList(): void {
       meta.textContent = "loading…";
     }
     left.append(url, meta);
+    if (metaSummary && metaSummary.errors.length > 0) {
+      const errorList = document.createElement("ul");
+      errorList.className = "muted mono meta-errors";
+      errorList.dataset.testid = `registry-meta-errors-${encodeURIComponent(entry.url)}`;
+      for (const e of metaSummary.errors) {
+        const eli = document.createElement("li");
+        const label = e.name ? `${e.name} (${e.url})` : e.url;
+        eli.textContent = `failed: ${label} — ${e.message}`;
+        errorList.append(eli);
+      }
+      left.append(errorList);
+    }
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "secondary";
@@ -591,6 +631,15 @@ function renderCards(): void {
     id.className = "id";
     id.textContent = row.addon.id;
     head.append(name, id, badgeFor(row.verifyResult));
+    if (row.metaFeatured) {
+      const featured = document.createElement("span");
+      featured.className = "badge badge-featured";
+      featured.dataset.testid = `addon-featured-${row.addon.id}`;
+      featured.textContent = "featured";
+      featured.title =
+        `Featured by meta-index ${row.metaSourceName ?? row.metaSourceUrl ?? ""}`.trim();
+      head.append(featured);
+    }
     if (row.addon.deprecated) {
       const dep = document.createElement("span");
       dep.className = "badge badge-warn";
@@ -679,38 +728,57 @@ function renderCards(): void {
   }
 }
 
-async function refreshAll(): Promise<void> {
-  const status = $("#config-status") as HTMLElement | null;
-  if (status)
-    status.textContent = `loading ${state.registries.length} registr${state.registries.length === 1 ? "y" : "ies"}…`;
-  state.rows = [];
-  state.registriesByUrl = new Map();
-  state.loadErrors = new Map();
-  state.metaByUrl = new Map();
-  renderRegistryList();
-  renderCards();
+interface RefreshOptions {
+  readonly bypassCache?: boolean;
+}
 
-  for (const entry of state.registries) {
-    try {
-      const { registries, addons, meta } = await loadFromUrl(entry.url);
-      for (const r of registries) state.registriesByUrl.set(r.url, r.registry);
-      state.rows.push(...addons);
-      if (meta) state.metaByUrl.set(entry.url, meta);
-    } catch (err) {
-      state.loadErrors.set(entry.url, (err as Error).message);
+async function refreshAll(opts: RefreshOptions = {}): Promise<void> {
+  // The browser HTTP cache is honoured by default. Refresh-with-bypass
+  // forces revalidation for every fetch in this run; once the run
+  // completes we revert to the default so subsequent loads still hit
+  // the cache where the server permits it.
+  const previousCache = currentCacheMode;
+  currentCacheMode = opts.bypassCache ? "reload" : "default";
+  try {
+    const status = $("#config-status") as HTMLElement | null;
+    if (status)
+      status.textContent = `loading ${state.registries.length} registr${state.registries.length === 1 ? "y" : "ies"}…`;
+    state.rows = [];
+    state.registriesByUrl = new Map();
+    state.loadErrors = new Map();
+    state.metaByUrl = new Map();
+    renderRegistryList();
+    renderCards();
+
+    for (const entry of state.registries) {
+      try {
+        const { registries, addons, meta } = await loadFromUrl(entry.url);
+        for (const r of registries) state.registriesByUrl.set(r.url, r.registry);
+        state.rows.push(...addons);
+        if (meta) state.metaByUrl.set(entry.url, meta);
+      } catch (err) {
+        state.loadErrors.set(entry.url, (err as Error).message);
+      }
     }
-  }
 
-  if (status) {
-    const errCount = state.loadErrors.size;
-    status.textContent =
-      errCount > 0
-        ? `${state.registries.length - errCount} of ${state.registries.length} registries loaded; ${errCount} failed`
-        : `${state.registries.length} registries loaded · ${state.rows.length} add-ons`;
+    if (status) {
+      const errCount = state.loadErrors.size;
+      const partialMetaErrors = [...state.metaByUrl.values()].reduce(
+        (n, m) => n + m.errors.length,
+        0,
+      );
+      const tail = partialMetaErrors > 0 ? ` (${partialMetaErrors} meta publishers failed)` : "";
+      status.textContent =
+        errCount > 0
+          ? `${state.registries.length - errCount} of ${state.registries.length} registries loaded; ${errCount} failed${tail}`
+          : `${state.registries.length} registries loaded · ${state.rows.length} add-ons${tail}`;
+    }
+    renderRegistryList();
+    renderFilters();
+    renderCards();
+  } finally {
+    currentCacheMode = previousCache;
   }
-  renderRegistryList();
-  renderFilters();
-  renderCards();
 }
 
 function bindUi(): void {
@@ -739,6 +807,13 @@ function bindUi(): void {
       writeRegistries(state.registries);
       addInput.value = "";
       void refreshAll();
+    });
+  }
+
+  const refreshBtn = $("#btn-registry-refresh") as HTMLButtonElement | null;
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", () => {
+      void refreshAll({ bypassCache: true });
     });
   }
 
