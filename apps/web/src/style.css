@@ -141,6 +141,65 @@ textarea {
   background: canvas;
 }
 
+.health-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 0.35rem;
+  background: #888;
+  box-shadow: 0 0 0 1px color-mix(in oklab, canvastext 25%, transparent);
+}
+.health-dot[data-state="idle"] {
+  background: #888;
+}
+.health-dot[data-state="connecting"] {
+  background: #d6a800;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.health-dot[data-state="connected"] {
+  background: #2ea043;
+}
+.health-dot[data-state="closed"] {
+  background: #6e7781;
+}
+.health-dot[data-state="failed"] {
+  background: #d93737;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+#btn-retry {
+  background: #d93737;
+  color: white;
+  border: 0;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+}
+
+#btn-retry[hidden] {
+  display: none !important;
+}
+
+#uptime:empty {
+  display: none;
+}
+
+#ice-info {
+  font-size: 0.75rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
 .modal::backdrop {
   background: rgb(0 0 0 / 45%);
 }

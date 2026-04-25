@@ -31,8 +31,14 @@
         <div class="row">
           <button id="btn-create-room">① Create room (inviter)</button>
           <span id="room-id" class="mono"></span>
-          <span class="muted">state: <span id="state" class="mono">idle</span></span>
+          <span class="muted">
+            <span id="health-dot" class="health-dot" data-state="idle" aria-hidden="true"></span>
+            <span>state: <span id="state" class="mono">idle</span></span>
+          </span>
+          <span id="uptime" class="muted mono"></span>
+          <button id="btn-retry" type="button" hidden>retry</button>
         </div>
+        <div id="ice-info" class="muted mono"></div>
 
         <div class="row">
           <button id="btn-export">② export URL</button>

@@ -34,7 +34,51 @@ const roomLabel = document.querySelector<HTMLSpanElement>("#room-id");
 const exportOut = document.querySelector<HTMLTextAreaElement>("#export-out");
 const importIn = document.querySelector<HTMLInputElement>("#import-in");
 const stateLabel = document.querySelector<HTMLSpanElement>("#state");
+const healthDot = document.querySelector<HTMLSpanElement>("#health-dot");
+const uptimeEl = document.querySelector<HTMLSpanElement>("#uptime");
+const iceInfoEl = document.querySelector<HTMLElement>("#ice-info");
+const retryBtn = document.querySelector<HTMLButtonElement>("#btn-retry");
 const textIn = document.querySelector<HTMLInputElement>("#text-in");
+
+renderIceInfo();
+let connectedAt: number | null = null;
+let uptimeTimer: ReturnType<typeof setInterval> | null = null;
+
+function renderIceInfo(): void {
+  if (!iceInfoEl) return;
+  const servers = RTC_CONFIG.iceServers ?? [];
+  if (servers.length === 0) {
+    iceInfoEl.textContent = "ICE: none configured (direct only)";
+    return;
+  }
+  const labels = servers.flatMap((s) => {
+    const urls = Array.isArray(s.urls) ? s.urls : [s.urls];
+    return urls.map((u) => {
+      if (!u) return "?";
+      if (u.startsWith("turn:") || u.startsWith("turns:")) return `TURN(${u})`;
+      if (u.startsWith("stun:")) return `STUN(${u})`;
+      return u;
+    });
+  });
+  iceInfoEl.textContent = `ICE: ${labels.join(" · ")}`;
+}
+
+function fmtUptime(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rest = s % 60;
+  return `${m}m${rest.toString().padStart(2, "0")}s`;
+}
+
+function refreshUptime(): void {
+  if (!uptimeEl) return;
+  if (connectedAt === null) {
+    uptimeEl.textContent = "";
+    return;
+  }
+  uptimeEl.textContent = `up ${fmtUptime(Date.now() - connectedAt)}`;
+}
 
 if (statusEl) {
   const line = document.createElement("p");
@@ -58,6 +102,26 @@ function short(id: string): string {
 
 function setSessionState(s: string): void {
   if (stateLabel) stateLabel.textContent = s;
+  if (healthDot) healthDot.dataset.state = s;
+  if (s === "connected") {
+    connectedAt = Date.now();
+    refreshUptime();
+    if (!uptimeTimer) uptimeTimer = setInterval(refreshUptime, 1_000);
+  } else {
+    connectedAt = null;
+    if (uptimeTimer) {
+      clearInterval(uptimeTimer);
+      uptimeTimer = null;
+    }
+    refreshUptime();
+  }
+  if (retryBtn) {
+    if (s === "failed" || s === "closed") {
+      retryBtn.hidden = false;
+    } else {
+      retryBtn.hidden = true;
+    }
+  }
 }
 
 function attachSession(s: PeerSession): void {
@@ -69,6 +133,35 @@ function attachSession(s: PeerSession): void {
   });
   s.on("text", (msg) => log(`peer text: ${msg}`));
   s.on("error", (err) => log(`session error: ${err.message}`));
+}
+
+async function resetForRetry(): Promise<void> {
+  // Tear down everything tied to the old session and start fresh as the
+  // inviter. The joiner side keeps the original invite URL on hand, so
+  // a simple "create new room" matches both roles for v1.
+  if (session) {
+    try {
+      await session.close();
+    } catch {
+      /* idempotent */
+    }
+    session = null;
+  }
+  if (addonHost) {
+    try {
+      await addonHost.close();
+    } catch {
+      /* idempotent */
+    }
+    addonHost = null;
+  }
+  room = null;
+  remotePeer = null;
+  if (roomLabel) roomLabel.textContent = "";
+  if (exportOut) exportOut.value = "";
+  setSessionState("idle");
+  log("retry: reset; ready to create a new room");
+  await startInviter();
 }
 
 async function startInviter(): Promise<RoomId> {
@@ -145,6 +238,14 @@ document
       log(`start error: ${(err as Error).message}`);
     }
   });
+
+document.querySelector<HTMLButtonElement>("#btn-retry")?.addEventListener("click", async () => {
+  try {
+    await resetForRetry();
+  } catch (err) {
+    log(`retry error: ${(err as Error).message}`);
+  }
+});
 
 document.querySelector<HTMLButtonElement>("#btn-export")?.addEventListener("click", async () => {
   let url: string | null;
