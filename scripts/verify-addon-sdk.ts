@@ -3,7 +3,7 @@
  * pnpm verify:addon-sdk
  *
  * Regression guard for the @senn/addon-sdk package shape pinned by
- * ADR-0018. Checks that:
+ * ADR-0018 and the publish contract pinned by ADR-0019. Checks that:
  *
  *   1. dist/index.{js,d.ts} exist and are non-empty.
  *   2. package.json exports map exposes the documented entry points.
@@ -13,13 +13,20 @@
  *      the actual classic-script runtime file.
  *   5. dist/index.d.ts re-exports the named types and declares the
  *      `Window.senn?` ambient global.
+ *   6. (ADR-0019 §6a) When the package is public on npm, the local
+ *      package.json#version differs from the npm `latest` dist-tag if
+ *      any of the surface enumerated in ADR-0018 has changed since
+ *      that version. No-op when the package is not yet published or
+ *      when the network is unavailable.
+ *   7. (ADR-0019 §6b) The runtime classic-script bytes match every
+ *      shipped copy under apps/web/public/addons and examples/.
  *
  * Run after `pnpm --filter @senn/addon-sdk build` (or after a full
  * `pnpm typecheck`, which builds dist as a side-effect via project
  * references).
  */
-import { access, readFile, stat } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { access, readFile, readdir, stat } from "node:fs/promises";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -30,6 +37,9 @@ const DIST_DTS = resolve(SDK_DIR, "dist/index.d.ts");
 const RUNTIME_JS = resolve(SDK_DIR, "runtime/senn-addon-sdk.js");
 const RUNTIME_DTS = resolve(SDK_DIR, "runtime/senn-addon-sdk.d.ts");
 const PACKAGE_JSON = resolve(SDK_DIR, "package.json");
+
+const STATIC_ADDONS_DIR = resolve(REPO_ROOT, "apps/web/public/addons");
+const EXAMPLES_DIR = resolve(REPO_ROOT, "examples");
 
 interface PackageExportsMap {
   readonly [key: string]:
@@ -43,6 +53,8 @@ interface PackageExportsMap {
 
 interface PackageJson {
   readonly name?: unknown;
+  readonly version?: unknown;
+  readonly private?: unknown;
   readonly main?: unknown;
   readonly module?: unknown;
   readonly types?: unknown;
@@ -172,14 +184,117 @@ async function checkAmbientGlobal(): Promise<void> {
   }
 }
 
+async function checkRuntimeByteEquality(): Promise<void> {
+  // ADR-0019 §6b: every shipped copy of senn-addon-sdk.js MUST equal
+  // the canonical runtime/ source. Drift means an addon would carry a
+  // different bridge from the one the SDK package claims to ship.
+  let canonical: Buffer;
+  try {
+    canonical = await readFile(RUNTIME_JS);
+  } catch {
+    fail("runtime/senn-addon-sdk.js missing — cannot byte-check shipped copies");
+    return;
+  }
+
+  const targets: string[] = [];
+  try {
+    for (const entry of await readdir(STATIC_ADDONS_DIR, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      targets.push(resolve(STATIC_ADDONS_DIR, entry.name, "senn-addon-sdk.js"));
+    }
+  } catch {
+    /* directory may not exist in pruned checkouts; skip silently */
+  }
+  try {
+    for (const entry of await readdir(EXAMPLES_DIR, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      targets.push(resolve(EXAMPLES_DIR, entry.name, "senn-addon-sdk.js"));
+    }
+  } catch {
+    /* same — examples may be pruned */
+  }
+
+  let checked = 0;
+  for (const t of targets) {
+    if (!(await exists(t))) continue; // not every dir ships the runtime
+    checked += 1;
+    const buf = await readFile(t);
+    if (buf.length !== canonical.length || !buf.equals(canonical)) {
+      fail(
+        `runtime drift: ${relative(REPO_ROOT, t)} differs from runtime/senn-addon-sdk.js — run \`pnpm build:addon-sdk\` and commit`,
+      );
+    }
+  }
+  if (checked === 0) {
+    fail(
+      "runtime byte-equality check found no shipped copies — has the static-addons layout moved?",
+    );
+  }
+}
+
+interface NpmPackument {
+  readonly "dist-tags"?: { readonly latest?: string };
+  readonly versions?: Record<string, unknown>;
+}
+
+async function fetchNpmLatest(name: string): Promise<string | null> {
+  // ADR-0019 §6a: probe npm for the package's latest dist-tag. If the
+  // package is not yet published (404) or the network is unavailable,
+  // return null and treat the version-bump guard as a no-op.
+  if (process.env.SENN_VERIFY_SDK_OFFLINE === "1") return null;
+  const url = `https://registry.npmjs.org/${name.replace(/\//g, "%2F")}`;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    const body = (await res.json()) as NpmPackument;
+    return body["dist-tags"]?.latest ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function checkVersionBump(pkg: PackageJson): Promise<void> {
+  // ADR-0019 §6a: if the package is publishable (private !== true) and
+  // the package.json#version equals the latest published version, then
+  // the SDK surface MUST NOT have changed since that version was cut.
+  // This is a coarse check — we trust the maintainer's bump rather than
+  // diff dist/index.d.ts against the registry tarball — but it catches
+  // the most common drift: forgetting to bump after editing the SDK.
+  if (pkg.private === true) return; // not publishable yet → guard is a no-op
+  if (typeof pkg.name !== "string" || typeof pkg.version !== "string") return;
+
+  const latest = await fetchNpmLatest(pkg.name);
+  if (latest === null) return; // package not on npm yet, or offline → no-op
+
+  if (pkg.version !== latest) return; // version was bumped → guard satisfied
+
+  // Same version as published. The dist/ output present here MUST be
+  // byte-identical to what is on npm; we cannot verify that cheaply
+  // without downloading the tarball, so we surface the guidance and
+  // let CI fail if any SDK source actually changed in the same PR.
+  // The runtime byte-equality check above already enforces the runtime
+  // half; this check addresses the type-surface half.
+  fail(
+    `package.json version "${pkg.version}" matches the npm "latest" dist-tag — bump version per ADR-0019 §3 if any SDK surface changed`,
+  );
+}
+
 async function main(): Promise<void> {
   console.log(`addon-sdk  ${SDK_DIR}`);
   await checkArtefacts();
+  const pkgRaw = await readFile(PACKAGE_JSON, "utf8");
+  const pkg = JSON.parse(pkgRaw) as PackageJson;
   await checkPackageJson();
   if (await exists(DIST_DTS)) await checkAmbientGlobal();
+  await checkRuntimeByteEquality();
+  await checkVersionBump(pkg);
 
   if (failures.length === 0) {
-    console.log("verify-addon-sdk: ADR-0018 contract holds.");
+    console.log("verify-addon-sdk: ADR-0018 + ADR-0019 contract holds.");
     return;
   }
   console.error("");

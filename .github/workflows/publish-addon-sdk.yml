@@ -1,0 +1,114 @@
+name: publish-addon-sdk
+
+# ADR-0019 §5: tag-driven release for @senn/addon-sdk. Triggered only
+# by tags shaped `addon-sdk-v<semver>`. The job runs on `main` (the tag
+# MUST point at a commit on main) and publishes to npm with provenance.
+
+on:
+  push:
+    tags:
+      - "addon-sdk-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "tag to publish (e.g. addon-sdk-v0.1.0). Defaults to GITHUB_REF on push."
+        required: false
+
+concurrency:
+  group: publish-addon-sdk-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write   # required for `npm publish --provenance`
+
+jobs:
+  publish:
+    name: publish @senn/addon-sdk
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Resolve tag
+        id: tag
+        env:
+          DISPATCH_TAG: ${{ github.event.inputs.tag }}
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          if [ -n "$DISPATCH_TAG" ]; then
+            tag="$DISPATCH_TAG"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          case "$tag" in
+            addon-sdk-v*) ;;
+            *)
+              echo "::error::tag '$tag' does not match addon-sdk-v<semver>"
+              exit 1
+              ;;
+          esac
+          version="${tag#addon-sdk-v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify tag matches package.json#version
+        env:
+          EXPECTED: ${{ steps.tag.outputs.version }}
+        run: |
+          actual=$(node -p "require('./packages/addon-sdk/package.json').version")
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "::error::packages/addon-sdk/package.json version='$actual' but tag asserts '$EXPECTED'"
+            exit 1
+          fi
+
+      - name: Verify package is publishable (private must not be true)
+        run: |
+          priv=$(node -p "require('./packages/addon-sdk/package.json').private===true")
+          if [ "$priv" = "true" ]; then
+            echo "::error::packages/addon-sdk/package.json still has private:true — flip per ADR-0019 before tagging"
+            exit 1
+          fi
+
+      - name: Typecheck (builds dist via project references)
+        run: pnpm typecheck
+
+      - name: Verify @senn/addon-sdk package shape (ADR-0018 + ADR-0019)
+        run: pnpm verify:addon-sdk
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Vitest (workspace)
+        run: pnpm test
+
+      - name: Verify pack contents are non-empty
+        working-directory: packages/addon-sdk
+        run: |
+          tarball=$(pnpm pack --silent)
+          tar -tzf "$tarball" | sort
+          test -s "$tarball"
+
+      - name: Publish to npm with provenance
+        working-directory: packages/addon-sdk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish --no-git-checks

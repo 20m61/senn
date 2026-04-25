@@ -51,7 +51,13 @@ jobs:
       - name: Verify official add-on registry signatures
         run: pnpm verify:official
 
-      - name: Verify @senn/addon-sdk package shape (ADR-0018)
+      - name: Verify @senn/addon-sdk package shape (ADR-0018 + ADR-0019)
+        # SENN_VERIFY_SDK_OFFLINE=1 makes the ADR-0019 §6a npm probe a
+        # no-op on push/PR runs. The publish-addon-sdk.yml workflow is
+        # where the live npm probe matters; conformance must not flake
+        # on transient npmjs.org 5xx.
+        env:
+          SENN_VERIFY_SDK_OFFLINE: "1"
         run: pnpm verify:addon-sdk
 
       - name: Verify shipped addon-sdk runtime is up to date
