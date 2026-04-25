@@ -75,7 +75,10 @@ Decoders MUST reject:
 https://<host>/<path>#i=<base64url-deflate-raw-utf8-json>
 ```
 
-- The scheme MUST be `https` (or `file://` for local-only test fixtures).
+- The scheme MUST be `https`. As a local-only exception, `http://localhost`,
+  `http://127.0.0.1`, `http://[::1]`, and `file://` are also permitted —
+  these match the browser's secure-context loopback exception and exist
+  solely for local development and offline test fixtures.
 - The fragment key for the invite payload MUST be `i`.
 - The fragment value MUST decode to a valid `InvitePayload`.
 - QR codes MUST encode the full URL.

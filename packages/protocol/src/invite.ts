@@ -126,12 +126,20 @@ export async function decodeInvite(encoded: string): Promise<InvitePayload> {
   return validateInvitePayload(parsed);
 }
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+
+function assertAllowedScheme(url: URL): void {
+  if (url.protocol === "https:" || url.protocol === "file:") return;
+  if (url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname)) return;
+  throw new InviteValidationError(
+    `invite scheme must be https (or http on loopback / file://), got ${url.protocol}//${url.hostname}`,
+  );
+}
+
 /** Build a full invite URL from a base URL (origin + path) and a payload. */
 export async function buildInviteUrl(baseUrl: string, payload: InvitePayload): Promise<string> {
   const url = new URL(baseUrl);
-  if (url.protocol !== "https:" && url.protocol !== "file:") {
-    throw new InviteValidationError(`invite scheme must be https or file, got ${url.protocol}`);
-  }
+  assertAllowedScheme(url);
   url.hash = `${INVITE_FRAGMENT_KEY}=${await encodeInvite(payload)}`;
   const result = url.toString();
   if (result.length > INVITE_URL_MAX_LENGTH) {
@@ -177,9 +185,7 @@ export async function buildInviteBundleUrl(
     }
   }
   const url = new URL(baseUrl);
-  if (url.protocol !== "https:" && url.protocol !== "file:") {
-    throw new InviteValidationError(`invite scheme must be https or file, got ${url.protocol}`);
-  }
+  assertAllowedScheme(url);
   const inviteEncoded = await encodeInvite(invite);
   const bundleEncoded = await encodeSignalingBundle(bundle);
   url.hash = `${INVITE_FRAGMENT_KEY}=${inviteEncoded}&${SIGNALING_BUNDLE_FRAGMENT_KEY}=${bundleEncoded}`;
@@ -335,9 +341,17 @@ async function inflateRaw(input: Uint8Array): Promise<Uint8Array> {
 }
 
 async function runStream(ts: GenericTransformStream, input: Uint8Array): Promise<Uint8Array> {
-  const writer = ts.writable.getWriter();
-  await writer.write(input);
-  await writer.close();
+  // Writer and reader must run concurrently — Chrome's CompressionStream
+  // applies backpressure if the readable side hasn't started consuming.
+  const writePromise = (async () => {
+    const writer = ts.writable.getWriter();
+    try {
+      await writer.write(input);
+      await writer.close();
+    } finally {
+      writer.releaseLock();
+    }
+  })();
   const reader = ts.readable.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -349,6 +363,7 @@ async function runStream(ts: GenericTransformStream, input: Uint8Array): Promise
       total += value.byteLength;
     }
   }
+  await writePromise;
   const out = new Uint8Array(total);
   let off = 0;
   for (const c of chunks) {

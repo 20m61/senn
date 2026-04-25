@@ -243,9 +243,17 @@ function base64urlDecode(encoded: string): Uint8Array {
 }
 
 async function runStream(ts: GenericTransformStream, input: Uint8Array): Promise<Uint8Array> {
-  const writer = ts.writable.getWriter();
-  await writer.write(input);
-  await writer.close();
+  // Writer and reader must run concurrently — Chrome's CompressionStream
+  // applies backpressure if the readable side hasn't started consuming.
+  const writePromise = (async () => {
+    const writer = ts.writable.getWriter();
+    try {
+      await writer.write(input);
+      await writer.close();
+    } finally {
+      writer.releaseLock();
+    }
+  })();
   const reader = ts.readable.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -257,6 +265,7 @@ async function runStream(ts: GenericTransformStream, input: Uint8Array): Promise
       total += value.byteLength;
     }
   }
+  await writePromise;
   const out = new Uint8Array(total);
   let off = 0;
   for (const c of chunks) {

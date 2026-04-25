@@ -1,7 +1,15 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
   "files": {
-    "ignore": ["dist", "build", "node_modules", "**/*.min.js"]
+    "ignore": [
+      "dist",
+      "build",
+      "node_modules",
+      "**/*.min.js",
+      "**/test-results",
+      "**/playwright-report",
+      "**/playwright/.cache"
+    ]
   },
   "formatter": {
     "enabled": true,

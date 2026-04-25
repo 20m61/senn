@@ -121,9 +121,6 @@ async function composeExportUrl(): Promise<string | null> {
       protocolVersion: SENN_PROTOCOL_VERSION,
       capabilities: ["text-v1"],
     };
-    // Re-derive the bundle we just exported from the messages the user
-    // published. `exportBundle` already drained the outbox, so reconstruct
-    // a bundle for the combined URL by parsing the encoded form back.
     const decoded = await decodeSignalingBundle(encoded);
     const bundle: SignalingBundleV1 = {
       v: SIGNALING_BUNDLE_VERSION,
@@ -147,7 +144,13 @@ document.querySelector<HTMLButtonElement>("#btn-publish")?.addEventListener("cli
 });
 
 document.querySelector<HTMLButtonElement>("#btn-export")?.addEventListener("click", async () => {
-  const url = await composeExportUrl();
+  let url: string | null;
+  try {
+    url = await composeExportUrl();
+  } catch (err) {
+    if (exportOut) exportOut.value = `(error: ${(err as Error).message})`;
+    return;
+  }
   if (!exportOut) return;
   if (url === null) {
     exportOut.value = "(create a room first)";
