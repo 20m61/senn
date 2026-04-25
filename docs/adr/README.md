@@ -44,3 +44,4 @@ Proposed | Accepted | Superseded by ADR-XXXX | Deprecated
 | 0017 | [Registry schema v2 — categorisation, deprecation, meta-registries](0017-registry-schema-v2.md) | Accepted (design only) |
 | 0018 | [Add-on SDK type distribution](0018-addon-sdk-types.md) | Accepted |
 | 0019 | [Public npm publish pipeline](0019-publish-pipeline.md) | Accepted (design only; release flow lands as a follow-up) |
+| 0020 | [Registry schema v3 — version histories, submissions, audits](0020-registry-schema-v3.md) | Proposed |
