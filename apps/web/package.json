@@ -19,7 +19,8 @@
     "@senn/protocol": "workspace:*",
     "@senn/signaling-url-fragment": "workspace:*",
     "@senn/storage": "workspace:*",
-    "@senn/ui": "workspace:*"
+    "@senn/ui": "workspace:*",
+    "qrcode-generator": "^1.4.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",

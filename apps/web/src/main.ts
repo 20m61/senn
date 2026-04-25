@@ -15,6 +15,7 @@ import {
 } from "@senn/protocol";
 import { UrlFragmentSignaling } from "@senn/signaling-url-fragment";
 import { IndexedDbStorageBackend } from "@senn/storage";
+import qrcode from "qrcode-generator";
 
 const transport = new UrlFragmentSignaling();
 const addonStorageBackend = new IndexedDbStorageBackend();
@@ -164,6 +165,72 @@ document.querySelector<HTMLButtonElement>("#btn-export")?.addEventListener("clic
   }
   exportOut.value = url;
   exportOut.select();
+});
+
+// ── Share Modal (QR + clipboard) ────────────────────────────────────────────
+//
+// The Tier 0 invite URL is meant to be sent out-of-band. The Modal is a
+// thin presentation layer over composeExportUrl: it does not change the
+// invite contents, the signaling adapter, or any wire format.
+
+const shareModal = document.querySelector<HTMLDialogElement>("#share-modal");
+const shareQrEl = document.querySelector<HTMLDivElement>("#share-qr");
+const shareUrlEl = document.querySelector<HTMLTextAreaElement>("#share-url");
+const shareCopyStatus = document.querySelector<HTMLElement>("#share-copy-status");
+
+function renderQr(target: HTMLElement, text: string): void {
+  // Pick the smallest QR version that fits; fall back to a coarser ECC
+  // level if the URL is too long even at version 40.
+  for (const ecc of ["M", "L"] as const) {
+    try {
+      const qr = qrcode(0, ecc);
+      qr.addData(text);
+      qr.make();
+      target.innerHTML = qr.createSvgTag({ scalable: true, margin: 0 });
+      return;
+    } catch {
+      /* try the next ECC level */
+    }
+  }
+  target.textContent = "(URL too long for QR — use copy)";
+}
+
+document.querySelector<HTMLButtonElement>("#btn-share")?.addEventListener("click", async () => {
+  if (!shareModal || !shareQrEl || !shareUrlEl) return;
+  let url: string | null = null;
+  try {
+    url = await composeExportUrl();
+  } catch (err) {
+    log(`share error: ${(err as Error).message}`);
+    return;
+  }
+  if (!url) {
+    log("share: create a room first");
+    return;
+  }
+  if (exportOut) exportOut.value = url;
+  shareUrlEl.value = url;
+  renderQr(shareQrEl, url);
+  if (shareCopyStatus) shareCopyStatus.textContent = "";
+  shareModal.showModal();
+});
+
+document.querySelector<HTMLButtonElement>("#share-close")?.addEventListener("click", () => {
+  shareModal?.close();
+});
+
+document.querySelector<HTMLButtonElement>("#share-copy")?.addEventListener("click", async () => {
+  if (!shareUrlEl) return;
+  const text = shareUrlEl.value;
+  try {
+    await navigator.clipboard.writeText(text);
+    if (shareCopyStatus) shareCopyStatus.textContent = "copied";
+  } catch {
+    // Clipboard API can be denied (no user gesture, no permission, http origin).
+    // Fall back to selecting the text so the user can ⌘/Ctrl-C.
+    shareUrlEl.select();
+    if (shareCopyStatus) shareCopyStatus.textContent = "select + copy manually";
+  }
 });
 
 document.querySelector<HTMLButtonElement>("#btn-import")?.addEventListener("click", async () => {

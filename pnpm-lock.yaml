@@ -41,6 +41,9 @@ importers:
       '@senn/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      qrcode-generator:
+        specifier: ^1.4.4
+        version: 1.5.2
     devDependencies:
       '@playwright/test':
         specifier: ^1.59.1
@@ -659,6 +662,9 @@ packages:
     resolution: {integrity: sha512-pMMHxBOZKFU6HgAZ4eyGnwXF/EvPGGqUr0MnZ5+99485wwW41kW91A4LOGxSHhgugZmSChL5AlElNdwlNgcnLQ==}
     engines: {node: ^10 || ^12 || >=14}
 
+  qrcode-generator@1.5.2:
+    resolution: {integrity: sha512-pItrW0Z9HnDBnFmgiNrY1uxRdri32Uh9EjNYLPVC2zZ3ZRIIEqBoDgm4DkvDwNNDHTK7FNkmr8zAa77BYc9xNw==}
+
   resolve-pkg-maps@1.0.0:
     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
 
@@ -1202,6 +1208,8 @@ snapshots:
       nanoid: 3.3.11
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  qrcode-generator@1.5.2: {}
 
   resolve-pkg-maps@1.0.0: {}
 

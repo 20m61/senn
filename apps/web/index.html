@@ -36,6 +36,7 @@
 
         <div class="row">
           <button id="btn-export">② export URL</button>
+          <button id="btn-share">share URL (QR + copy)</button>
           <button id="btn-import">③ import paste</button>
         </div>
 
@@ -94,6 +95,27 @@
         <div id="addon-mount" class="addon-mount"></div>
       </section>
     </main>
+
+    <dialog id="share-modal" class="modal" aria-label="Share invite URL">
+      <div class="modal-card">
+        <header class="modal-head">
+          <h3>Share invite</h3>
+          <button id="share-close" type="button" aria-label="close">×</button>
+        </header>
+        <p class="muted">
+          Send this URL out-of-band (chat, email, scan the QR). Tier 0 — no signaling server is
+          contacted. The fragment carries the SDP/ICE bundle; everything after <code>#</code> stays
+          on the recipient's device.
+        </p>
+        <div id="share-qr" class="qr"></div>
+        <textarea id="share-url" rows="3" readonly></textarea>
+        <div class="row">
+          <button id="share-copy" type="button">copy URL</button>
+          <span id="share-copy-status" class="muted" aria-live="polite"></span>
+        </div>
+      </div>
+    </dialog>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
