@@ -104,7 +104,9 @@ Allows reading peer presence state.
 
 ### `audio.level`
 
-Allows reading non-content audio level metadata.
+Allows receiving microphone-derived energy values in `[0, 1]` from
+the host. The add-on never sees raw audio. See
+[addon-audio-level-spec.md](addon-audio-level-spec.md).
 
 ## Forbidden
 

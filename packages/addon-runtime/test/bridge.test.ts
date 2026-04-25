@@ -268,4 +268,87 @@ describe("@senn/addon-runtime — bridge ops", () => {
     expect(reply.error).toBe("permission-denied");
     await host.close();
   });
+
+  it("audio.level.subscribe without audio.level permission emits permission-denied", async () => {
+    const { host } = await loadHost({ permissions: ["ui.panel"] });
+    const replyP = captureNextReply(container);
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "audio.level.subscribe",
+    });
+    const reply = (await replyP) as { code?: string; op?: string };
+    expect(reply.op).toBe("error");
+    expect(reply.code).toBe("permission-denied");
+    expect(host.isSubscribedToAudioLevel).toBe(false);
+    await host.close();
+  });
+
+  it("audio.level subscribe → publishAudioLevel forwards to the iframe; clamps and ignores non-finite", async () => {
+    const { host } = await loadHost({ permissions: ["ui.panel", "audio.level"] });
+
+    // Drive the addon through the bridge handshake so currentState reaches "active".
+    postFromIframe(host, container, { kind: ADDON_BRIDGE_KIND, op: "ready" });
+    await flush();
+
+    // Subscribe.
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "audio.level.subscribe",
+    });
+    await flush();
+    expect(host.isSubscribedToAudioLevel).toBe(true);
+
+    // Forward a clean level.
+    let reply = captureNextReply(container);
+    host.publishAudioLevel(0.42);
+    const r1 = (await reply) as { op: string; level: number };
+    expect(r1.op).toBe("audio.level");
+    expect(r1.level).toBeCloseTo(0.42, 5);
+
+    // Clamp values outside [0, 1].
+    reply = captureNextReply(container);
+    host.publishAudioLevel(2.5);
+    const r2 = (await reply) as { level: number };
+    expect(r2.level).toBe(1);
+
+    reply = captureNextReply(container);
+    host.publishAudioLevel(-0.1);
+    const r3 = (await reply) as { level: number };
+    expect(r3.level).toBe(0);
+
+    await host.close();
+  });
+
+  it("audio.level.unsubscribe stops further deliveries", async () => {
+    const { host } = await loadHost({ permissions: ["ui.panel", "audio.level"] });
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "audio.level.subscribe",
+    });
+    await flush();
+    expect(host.isSubscribedToAudioLevel).toBe(true);
+
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "audio.level.unsubscribe",
+    });
+    await flush();
+    expect(host.isSubscribedToAudioLevel).toBe(false);
+
+    // After unsubscribe, publishAudioLevel must NOT post to the iframe.
+    // Patch postMessage to detect any posting; remove the patch on a tick.
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+    const win = iframe.contentWindow as Window;
+    const original = win.postMessage.bind(win);
+    let posted = 0;
+    win.postMessage = ((data: unknown) => {
+      posted++;
+      void data;
+    }) as typeof win.postMessage;
+    host.publishAudioLevel(0.5);
+    win.postMessage = original;
+    expect(posted).toBe(0);
+
+    await host.close();
+  });
 });

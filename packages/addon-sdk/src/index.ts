@@ -44,6 +44,15 @@ export interface SennAddonPeer {
   sendBinary(req: { mime?: string; bytes: Uint8Array }): void;
 }
 
+export interface SennAddonAudio {
+  /**
+   * Start receiving microphone-derived level values in [0,1]. Returns
+   * an unsubscribe function. Multiple calls inside one add-on share a
+   * single host-side subscription.
+   */
+  subscribeLevel(handler: (level: number) => void): () => void;
+}
+
 export interface SennAddonStorage {
   get<T = unknown>(key: string): Promise<T | null>;
   put(key: string, value: unknown): Promise<null>;
@@ -61,6 +70,7 @@ export interface SennAddonGlobal {
   ): () => void;
   readonly peer: SennAddonPeer;
   readonly storage: SennAddonStorage;
+  readonly audio: SennAddonAudio;
 }
 
 declare global {

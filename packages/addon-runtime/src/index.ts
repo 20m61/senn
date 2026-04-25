@@ -64,6 +64,9 @@ export type AddonBridgeMessage =
       from?: string;
     }
   | { kind: typeof ADDON_BRIDGE_KIND; op: "error"; code?: string; message: string }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "audio.level.subscribe" }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "audio.level.unsubscribe" }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "audio.level"; level: number }
   | {
       kind: typeof ADDON_BRIDGE_KIND;
       op: "storage";
@@ -221,6 +224,7 @@ export class AddonHost {
   private iframe: HTMLIFrameElement | null = null;
   private currentState: AddonHostState = "created";
   private detachPeer: (() => void) | null = null;
+  private audioLevelSubscribed = false;
   private readonly listeners: {
     [K in keyof AddonHostEvents]: Set<Listener<AddonHostEvents[K]>>;
   } = { state: new Set(), send: new Set(), error: new Set() };
@@ -351,6 +355,7 @@ export class AddonHost {
     globalThis.removeEventListener?.("message", this.windowMessageHandler);
     this.detachPeer?.();
     this.detachPeer = null;
+    this.audioLevelSubscribed = false;
     if (this.iframe) {
       this.iframe.remove();
       this.iframe = null;
@@ -431,6 +436,12 @@ export class AddonHost {
         return;
       case "send-bin":
         this.handleSendBin(msg.mime, msg.bytes);
+        return;
+      case "audio.level.subscribe":
+        this.handleAudioLevelSubscribe();
+        return;
+      case "audio.level.unsubscribe":
+        this.audioLevelSubscribed = false;
         return;
       case "error":
         this.emit("error", new Error(`addon: ${msg.message}`));
@@ -546,6 +557,38 @@ export class AddonHost {
         this.emit("error", err as Error);
       });
     }
+  }
+
+  private handleAudioLevelSubscribe(): void {
+    if (!this.manifest.permissions.includes("audio.level")) {
+      this.postToIframe({
+        kind: ADDON_BRIDGE_KIND,
+        op: "error",
+        code: "permission-denied",
+        message: "addon attempted audio.level.subscribe without audio.level permission",
+      });
+      return;
+    }
+    this.audioLevelSubscribed = true;
+  }
+
+  /**
+   * Push a microphone-derived audio level into the add-on. Per
+   * docs/addon-audio-level-spec.md the level is clamped to [0,1] and only
+   * delivered while the add-on has an active subscription. The host owns
+   * the actual MediaStream; the add-on never sees raw audio.
+   */
+  publishAudioLevel(level: number): void {
+    if (!this.audioLevelSubscribed) return;
+    if (this.currentState !== "active") return;
+    if (!Number.isFinite(level)) return;
+    const clamped = level < 0 ? 0 : level > 1 ? 1 : level;
+    this.postToIframe({ kind: ADDON_BRIDGE_KIND, op: "audio.level", level: clamped });
+  }
+
+  /** True iff the add-on currently has an active audio.level subscription. */
+  get isSubscribedToAudioLevel(): boolean {
+    return this.audioLevelSubscribed;
   }
 
   private handleSendBin(mime: unknown, bytes: unknown): void {

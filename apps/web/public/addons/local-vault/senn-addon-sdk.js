@@ -29,6 +29,7 @@
     "deliver-bin": new Set(),
     error: new Set(),
   };
+  const audioLevelHandlers = new Set();
 
   const emit = (event, value) => {
     const set = listeners[event];
@@ -77,6 +78,16 @@
       case "deliver-bin":
         emit("deliver-bin", { mime: msg.mime, bytes: msg.bytes, from: msg.from });
         return;
+      case "audio.level": {
+        for (const fn of audioLevelHandlers) {
+          try {
+            fn(msg.level);
+          } catch (err) {
+            console.error("senn-addon-sdk audio handler threw", err);
+          }
+        }
+        return;
+      }
       case "error": {
         const err = new Error(`${msg.code ? `${msg.code}: ` : ""}${msg.message || "bridge error"}`);
         err.code = msg.code;
@@ -132,6 +143,23 @@
       delete: (key) => rpcStorage({ storage: "delete", key }),
       list: () => rpcStorage({ storage: "list" }),
       clear: () => rpcStorage({ storage: "clear" }),
+    },
+    audio: {
+      subscribeLevel: (handler) => {
+        if (typeof handler !== "function") {
+          throw new TypeError("senn.audio.subscribeLevel: handler must be a function");
+        }
+        audioLevelHandlers.add(handler);
+        if (audioLevelHandlers.size === 1) {
+          post({ kind: KIND, op: "audio.level.subscribe" });
+        }
+        return () => {
+          audioLevelHandlers.delete(handler);
+          if (audioLevelHandlers.size === 0) {
+            post({ kind: KIND, op: "audio.level.unsubscribe" });
+          }
+        };
+      },
     },
   };
 })();
