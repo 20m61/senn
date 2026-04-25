@@ -148,7 +148,10 @@ const KNOWN_PERMISSIONS: ReadonlySet<string> = new Set([
   "audio.level",
 ]);
 
-const ADDON_BIN_MAX_BYTES = 64 * 1024;
+// Per-message cap for add-on binary payloads. PeerSession chunks the
+// body into ≤ 60 KiB per-frame slices on the wire (ADR-0012); the
+// add-on sees a single logical send-bin / deliver-bin.
+const ADDON_BIN_MAX_BYTES = 4 * 1024 * 1024;
 
 function asObject(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {

@@ -3,7 +3,7 @@
 // Uses @senn/addon-sdk's window.senn — no postMessage plumbing here.
 
 const KEY_PREFIX = "vault/";
-const PEER_BIN_MAX_BYTES = 64 * 1024;
+const PEER_BIN_MAX_BYTES = 4 * 1024 * 1024; // ADR-0012; bridge+PeerSession chunk transparently
 
 const stateEl = document.getElementById("state");
 const opStatus = document.getElementById("op-status");

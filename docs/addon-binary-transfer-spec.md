@@ -25,10 +25,14 @@ The decision and the size cap are recorded in
   not declared `peer.send.bin`.
 - The host MUST NOT deliver a `deliver-bin` event to an add-on that
   has not declared `peer.receive.bin`.
-- A v1 binary message body MUST be ≤ **65,536 bytes** (64 KiB). A
-  larger body MUST cause the host to reject the `send-bin` op with
-  `payload-too-large`. Chunking is intentionally NOT defined in this
-  version (future ADR).
+- A v1 single-frame body MUST be ≤ **65,536 bytes** (64 KiB).
+  Larger logical messages MUST be split into multiple frames per
+  [ADR-0012](adr/0012-chunked-binary-peer-transfer.md). The
+  per-message cap is **4 MiB**; bodies exceeding it MUST cause the
+  host to reject the `send-bin` op with `payload-too-large`.
+  Senders MUST chunk transparently — add-ons see one logical
+  `send-bin` / `deliver-bin` regardless of how many frames travel
+  on the wire.
 - Binary frames travel on a dedicated `core.bin` data channel,
   separate from `core.text`. The text channel MUST NOT carry binary
   frames; the binary channel MUST NOT carry text frames.
@@ -79,9 +83,11 @@ Errors surface on the existing `error` op with one of:
 | `code` | When |
 |--------|------|
 | `permission-denied` | Add-on lacks `peer.send.bin` (or `peer.receive.bin` for inbound). |
-| `payload-too-large` | `bytes.byteLength` exceeds 64 KiB. |
+| `payload-too-large` | `bytes.byteLength` exceeds the per-message cap (4 MiB by default; ADR-0012). |
 | `bad-payload` | `mime` not a string, `bytes` not a `Uint8Array`, etc. |
 | `not-connected` | `core.bin` channel is not open. |
+| `reassembly-overflow` | Receiver dropped this in-flight message because the per-peer reassembly buffer (16 MiB) was exhausted. |
+| `reassembly-timeout` | Receiver did not see all frames of a message within 60 s of the first frame. |
 
 ## Wire format (informative)
 
@@ -101,13 +107,23 @@ interface BinaryFrameHeaderV1 {
   readonly v: 1;
   readonly addon: string;         // routing key — addon id
   readonly mime: string;
-  readonly size: number;          // body byte length, sanity-check
+  readonly size: number;          // body byte length of THIS frame
+  readonly id?: string;           // logical message id, same across all frames
+  readonly seq?: number;          // 0-based frame index
+  readonly total?: number;        // total frame count (>= 1)
 }
 ```
 
 The `addon` field demuxes per-addon at the receiver (mirrors the
 `addon` field in the JSON envelope used on `core.text`). The receiver
 MUST drop frames whose `addon` does not match a loaded `AddonHost`.
+
+A frame omitting all of `id` / `seq` / `total` is a single-frame
+message (the original v1 wire). When `total > 1`, the receiver
+buffers frames keyed by `(from, addon, id)` and emits one
+`deliver-bin` once `seq` 0..total-1 have all arrived. Decoders MUST
+ignore unknown extra header fields so future ADRs (retransmission,
+parallel transfers) can extend the schema without bumping `v`.
 
 The receiver parses the header, validates `size === body.byteLength`,
 and emits `deliver-bin` to the matching add-on. A frame whose

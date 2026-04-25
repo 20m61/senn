@@ -47,7 +47,22 @@ export interface PeerSessionOptions {
 const TEXT_CHANNEL_LABEL = "core.text";
 const BIN_CHANNEL_LABEL = "core.bin";
 const TEXT_MAX_BYTES = 64 * 1024;
-const BIN_MAX_BYTES = 64 * 1024;
+const BIN_FRAME_MAX_BYTES = 64 * 1024; // single wire frame (ADR-0011)
+const BIN_BODY_PER_FRAME = 60 * 1024; // body per frame, leaving room for header
+const BIN_MESSAGE_MAX_BYTES = 4 * 1024 * 1024; // logical message cap (ADR-0012)
+const BIN_REASSEMBLY_BUDGET_BYTES = 16 * 1024 * 1024; // per-peer in-flight cap
+const BIN_REASSEMBLY_TIMEOUT_MS = 60_000;
+
+interface ReassemblySlot {
+  readonly id: string;
+  readonly addon: string;
+  readonly mime: string;
+  readonly total: number;
+  readonly frames: (Uint8Array | undefined)[];
+  receivedFrames: number;
+  bytes: number;
+  firstSeenAt: number;
+}
 
 type Listener<T> = (value: T) => void;
 
@@ -64,6 +79,10 @@ export class PeerSession {
   private channel: RTCDataChannel | null = null;
   private binChannel: RTCDataChannel | null = null;
   private signalingUnsub: Unsubscribe | null = null;
+  private readonly reassembly = new Map<string, ReassemblySlot>();
+  private reassemblyBytes = 0;
+  private reassemblyGcTimer: ReturnType<typeof setInterval> | null = null;
+  private nextSendId = 0;
 
   private currentState: PeerSessionState = "idle";
   private readonly listeners: {
@@ -208,27 +227,74 @@ export class PeerSession {
     if (!(message.bytes instanceof Uint8Array)) {
       throw new Error("PeerSession.sendBinary: bytes must be a Uint8Array");
     }
-    if (message.bytes.byteLength > BIN_MAX_BYTES) {
+    if (message.bytes.byteLength > BIN_MESSAGE_MAX_BYTES) {
       throw new Error(
-        `PeerSession.sendBinary: payload ${message.bytes.byteLength}B exceeds ${BIN_MAX_BYTES}B`,
+        `PeerSession.sendBinary: payload ${message.bytes.byteLength}B exceeds ${BIN_MESSAGE_MAX_BYTES}B`,
       );
     }
     if (!this.binChannel || this.binChannel.readyState !== "open") {
       throw new Error("PeerSession.sendBinary: binary channel is not open");
     }
-    const headerJson = JSON.stringify({
+    const total = Math.max(1, Math.ceil(message.bytes.byteLength / BIN_BODY_PER_FRAME));
+    if (total === 1) {
+      // Single-frame fast path keeps the v1 wire untouched (ADR-0011).
+      this.sendOneFrame({
+        addon: message.addon,
+        mime: message.mime,
+        body: message.bytes,
+      });
+      return;
+    }
+    const id = this.newMessageId();
+    for (let seq = 0; seq < total; seq++) {
+      const start = seq * BIN_BODY_PER_FRAME;
+      const end = Math.min(start + BIN_BODY_PER_FRAME, message.bytes.byteLength);
+      const slice = message.bytes.subarray(start, end);
+      this.sendOneFrame({
+        addon: message.addon,
+        mime: message.mime,
+        body: slice,
+        id,
+        seq,
+        total,
+      });
+    }
+  }
+
+  private sendOneFrame(opts: {
+    addon: string;
+    mime: string;
+    body: Uint8Array;
+    id?: string;
+    seq?: number;
+    total?: number;
+  }): void {
+    const headerObj: Record<string, unknown> = {
       v: 1,
-      addon: message.addon,
-      mime: message.mime,
-      size: message.bytes.byteLength,
-    });
+      addon: opts.addon,
+      mime: opts.mime,
+      size: opts.body.byteLength,
+    };
+    if (opts.id !== undefined) headerObj.id = opts.id;
+    if (opts.seq !== undefined) headerObj.seq = opts.seq;
+    if (opts.total !== undefined) headerObj.total = opts.total;
+    const headerJson = JSON.stringify(headerObj);
     const headerBytes = new TextEncoder().encode(headerJson);
-    const frame = new ArrayBuffer(4 + headerBytes.byteLength + message.bytes.byteLength);
+    const frameLen = 4 + headerBytes.byteLength + opts.body.byteLength;
+    if (frameLen > BIN_FRAME_MAX_BYTES) {
+      throw new Error(`PeerSession.sendBinary: frame ${frameLen}B exceeds ${BIN_FRAME_MAX_BYTES}B`);
+    }
+    const frame = new ArrayBuffer(frameLen);
     const view = new DataView(frame);
     view.setUint32(0, headerBytes.byteLength, true);
     new Uint8Array(frame, 4, headerBytes.byteLength).set(headerBytes);
-    new Uint8Array(frame, 4 + headerBytes.byteLength, message.bytes.byteLength).set(message.bytes);
-    this.binChannel.send(frame);
+    new Uint8Array(frame, 4 + headerBytes.byteLength, opts.body.byteLength).set(opts.body);
+    this.binChannel?.send(frame);
+  }
+
+  private newMessageId(): string {
+    this.nextSendId = (this.nextSendId + 1) % 0xffffff;
+    return `m_${Date.now().toString(36)}_${this.nextSendId.toString(36)}`;
   }
 
   async close(): Promise<void> {
@@ -251,6 +317,12 @@ export class PeerSession {
       this.binChannel = null;
       this.pc?.close();
       this.pc = null;
+      this.reassembly.clear();
+      this.reassemblyBytes = 0;
+      if (this.reassemblyGcTimer) {
+        clearInterval(this.reassemblyGcTimer);
+        this.reassemblyGcTimer = null;
+      }
     }
   }
 
@@ -304,7 +376,15 @@ export class PeerSession {
       this.emit("error", new Error("PeerSession.bin: header_len out of range"));
       return;
     }
-    let header: { v?: unknown; addon?: unknown; mime?: unknown; size?: unknown };
+    let header: {
+      v?: unknown;
+      addon?: unknown;
+      mime?: unknown;
+      size?: unknown;
+      id?: unknown;
+      seq?: unknown;
+      total?: unknown;
+    };
     try {
       const headerText = new TextDecoder().decode(new Uint8Array(buf, 4, headerLen));
       header = JSON.parse(headerText);
@@ -328,8 +408,140 @@ export class PeerSession {
       this.emit("error", new Error("PeerSession.bin: header.size != body length"));
       return;
     }
-    const bytes = new Uint8Array(buf.slice(bodyOffset));
-    this.emit("binary", { addon: header.addon, mime: header.mime, bytes });
+    const body = new Uint8Array(buf.slice(bodyOffset));
+    const isChunked =
+      typeof header.id === "string" &&
+      typeof header.seq === "number" &&
+      typeof header.total === "number" &&
+      header.total > 1;
+    if (!isChunked) {
+      this.emit("binary", { addon: header.addon, mime: header.mime, bytes: body });
+      return;
+    }
+    this.handleChunk({
+      addon: header.addon,
+      mime: header.mime,
+      id: header.id as string,
+      seq: header.seq as number,
+      total: header.total as number,
+      body,
+    });
+  }
+
+  private handleChunk(args: {
+    addon: string;
+    mime: string;
+    id: string;
+    seq: number;
+    total: number;
+    body: Uint8Array;
+  }): void {
+    const { addon, mime, id, seq, total, body } = args;
+    if (total < 1 || seq < 0 || seq >= total) {
+      this.emit("error", new Error("PeerSession.bin: seq/total out of range"));
+      return;
+    }
+    if (total * BIN_BODY_PER_FRAME > BIN_MESSAGE_MAX_BYTES) {
+      this.emit(
+        "error",
+        new Error(
+          `PeerSession.bin: declared message exceeds cap (${total} frames > ${BIN_MESSAGE_MAX_BYTES}B)`,
+        ),
+      );
+      return;
+    }
+    const key = `${addon}${id}`;
+    let slot = this.reassembly.get(key);
+    if (!slot) {
+      slot = {
+        id,
+        addon,
+        mime,
+        total,
+        frames: new Array(total),
+        receivedFrames: 0,
+        bytes: 0,
+        firstSeenAt: Date.now(),
+      };
+      this.reassembly.set(key, slot);
+      this.startReassemblyGcIfNeeded();
+    } else if (slot.total !== total || slot.mime !== mime) {
+      this.emit("error", new Error("PeerSession.bin: chunk total/mime mismatch within message"));
+      return;
+    }
+    if (slot.frames[seq] !== undefined) {
+      // Duplicate frame on a reliable channel — ignore.
+      return;
+    }
+    slot.frames[seq] = body;
+    slot.receivedFrames++;
+    slot.bytes += body.byteLength;
+    this.reassemblyBytes += body.byteLength;
+    this.evictUntilUnderBudget(key);
+    if (slot.receivedFrames === slot.total) {
+      const out = new Uint8Array(slot.bytes);
+      let offset = 0;
+      for (let i = 0; i < slot.total; i++) {
+        const f = slot.frames[i];
+        if (!f) continue;
+        out.set(f, offset);
+        offset += f.byteLength;
+      }
+      this.reassembly.delete(key);
+      this.reassemblyBytes -= slot.bytes;
+      this.maybeStopReassemblyGc();
+      this.emit("binary", { addon: slot.addon, mime: slot.mime, bytes: out });
+    }
+  }
+
+  private evictUntilUnderBudget(protectKey: string): void {
+    while (this.reassemblyBytes > BIN_REASSEMBLY_BUDGET_BYTES) {
+      let oldestKey: string | null = null;
+      let oldestAt = Number.POSITIVE_INFINITY;
+      for (const [k, slot] of this.reassembly) {
+        if (k === protectKey) continue;
+        if (slot.firstSeenAt < oldestAt) {
+          oldestAt = slot.firstSeenAt;
+          oldestKey = k;
+        }
+      }
+      if (!oldestKey) return;
+      const dropped = this.reassembly.get(oldestKey);
+      if (!dropped) return;
+      this.reassembly.delete(oldestKey);
+      this.reassemblyBytes -= dropped.bytes;
+      this.emit(
+        "error",
+        new Error(`PeerSession.bin: reassembly-overflow dropped ${dropped.addon}/${dropped.id}`),
+      );
+    }
+    this.maybeStopReassemblyGc();
+  }
+
+  private startReassemblyGcIfNeeded(): void {
+    if (this.reassemblyGcTimer || typeof setInterval !== "function") return;
+    this.reassemblyGcTimer = setInterval(() => this.gcStaleReassemblies(), 5_000);
+  }
+
+  private maybeStopReassemblyGc(): void {
+    if (this.reassembly.size === 0 && this.reassemblyGcTimer) {
+      clearInterval(this.reassemblyGcTimer);
+      this.reassemblyGcTimer = null;
+    }
+  }
+
+  private gcStaleReassemblies(): void {
+    const now = Date.now();
+    for (const [k, slot] of this.reassembly) {
+      if (now - slot.firstSeenAt < BIN_REASSEMBLY_TIMEOUT_MS) continue;
+      this.reassembly.delete(k);
+      this.reassemblyBytes -= slot.bytes;
+      this.emit(
+        "error",
+        new Error(`PeerSession.bin: reassembly-timeout dropped ${slot.addon}/${slot.id}`),
+      );
+    }
+    this.maybeStopReassemblyGc();
   }
 
   private async handleSignalingMessage(msg: SignalingMessage): Promise<void> {

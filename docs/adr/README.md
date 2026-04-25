@@ -36,3 +36,4 @@ Proposed | Accepted | Superseded by ADR-XXXX | Deprecated
 | 0009 | [Keystore minimum](0009-keystore-minimum.md) | Accepted |
 | 0010 | [Key rotation](0010-key-rotation.md) | Accepted |
 | 0011 | [Binary peer transfer](0011-binary-peer-transfer.md) | Accepted |
+| 0012 | [Chunked binary peer transfer](0012-chunked-binary-peer-transfer.md) | Accepted |
