@@ -130,7 +130,7 @@ function attachSession(s: PeerSession): void {
   s.on("state", (next) => {
     setSessionState(next);
     log(`session: ${next}`);
-    if (callStartBtn) callStartBtn.disabled = next !== "connected" || s.role !== "inviter";
+    if (callStartBtn) callStartBtn.disabled = next !== "connected";
   });
   s.on("text", (msg) => log(`peer text: ${msg}`));
   s.on("error", (err) => log(`session error: ${err.message}`));
@@ -588,10 +588,6 @@ micToggleBtn?.addEventListener("click", async () => {
 callStartBtn?.addEventListener("click", async () => {
   if (!session) {
     setCallStatus("call: no session");
-    return;
-  }
-  if (session.role !== "inviter") {
-    setCallStatus("call: stage 1 supports inviter only");
     return;
   }
   if (activeCall) return;

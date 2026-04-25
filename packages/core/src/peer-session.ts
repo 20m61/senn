@@ -110,7 +110,11 @@ export class PeerSession {
     error: new Set(),
   };
   private nextSenderId = 0;
-  private renegotiating = false;
+  private makingOffer = false;
+  private ignoreOffer = false;
+  private get isPolite(): boolean {
+    return this.role === "joiner";
+  }
 
   constructor(opts: PeerSessionOptions) {
     this.role = opts.role;
@@ -186,6 +190,15 @@ export class PeerSession {
       ev.track.onended = () => this.emit("remote-track-ended", { kind, track: ev.track });
     };
 
+    // Perfect negotiation pattern (MDN). Both roles drive offers through
+    // onnegotiationneeded; impolite peer (inviter) ignores incoming offers
+    // during its own makingOffer; polite peer (joiner) accepts via implicit
+    // rollback. The initial inviter offer is also published from here, so
+    // there is exactly one offer publishing path in the code.
+    pc.onnegotiationneeded = () => {
+      void this.runNegotiation().catch((err) => this.emit("error", err as Error));
+    };
+
     if (this.role === "inviter") {
       const channel = pc.createDataChannel(TEXT_CHANNEL_LABEL);
       this.bindDataChannel(channel);
@@ -211,16 +224,27 @@ export class PeerSession {
     this.signalingUnsub = this.signaling.subscribe(this.roomId, (msg) => {
       void this.handleSignalingMessage(msg).catch((err) => this.emit("error", err as Error));
     });
+    // Initial offer for the inviter is driven by pc.onnegotiationneeded —
+    // fired by the data-channel creates above — through runNegotiation().
+  }
 
-    if (this.role === "inviter") {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      if (!offer.sdp) throw new Error("PeerSession: createOffer() produced no SDP");
+  private async runNegotiation(): Promise<void> {
+    const pc = this.pc;
+    if (!pc) return;
+    try {
+      this.makingOffer = true;
+      // setLocalDescription() with no args generates an offer or answer
+      // appropriate to the current state. We use it for offers here; the
+      // answer path lives in handleSignalingMessage.case "offer".
+      await pc.setLocalDescription();
+      if (!pc.localDescription || !pc.localDescription.sdp) return;
       await this.signaling.publish(this.roomId, {
         kind: "offer",
         from: this.localPeerId,
-        sdp: offer.sdp,
+        sdp: pc.localDescription.sdp,
       });
+    } finally {
+      this.makingOffer = false;
     }
   }
 
@@ -322,23 +346,16 @@ export class PeerSession {
   }
 
   /**
-   * Add a local MediaStreamTrack to the peer connection. ADR-0015 stage 1:
-   * inviter-side only. The host owns the track; PeerSession just attaches
-   * it to RTCPeerConnection and triggers a fresh offer/answer cycle through
-   * the existing SignalingTransport. The receiver gets it via the
-   * 'remote-track' event.
-   *
-   * Bidirectional sending will land with the polite/impolite glare rules
-   * in a follow-up; for v1 only the inviter renegotiates so the wire stays
-   * deterministic.
+   * Add a local MediaStreamTrack to the peer connection. ADR-0015: both
+   * roles can call this; mid-session renegotiation rides the perfect-
+   * negotiation pattern wired in `pc.onnegotiationneeded`. The host owns
+   * the track lifetime; PeerSession just attaches it and surfaces the
+   * resulting RTCRtpSender as a SENN-shaped handle.
    */
   async addLocalTrack(
     track: MediaStreamTrack,
     stream?: MediaStream,
   ): Promise<PeerSessionLocalSender> {
-    if (this.role !== "inviter") {
-      throw new Error("PeerSession.addLocalTrack: stage 1 supports inviter only (ADR-0015)");
-    }
     if (this.currentState === "closed" || this.currentState === "failed") {
       throw new Error(`PeerSession.addLocalTrack: session is ${this.currentState}`);
     }
@@ -348,10 +365,8 @@ export class PeerSession {
     const rtpSender = stream ? pc.addTrack(track, stream) : pc.addTrack(track);
     this.nextSenderId = (this.nextSenderId + 1) % 0xffffff;
     const senderId = `s_${this.nextSenderId.toString(36)}`;
-    if (this.currentState === "connected") {
-      // Mid-session add — kick a fresh offer through the existing channel.
-      await this.renegotiateAsInviter();
-    }
+    // pc.addTrack triggers `onnegotiationneeded` automatically; runNegotiation
+    // generates a fresh offer and ships it through the existing transport.
     const remove = async (): Promise<void> => {
       if (!this.pc) return;
       try {
@@ -359,31 +374,10 @@ export class PeerSession {
       } catch {
         /* idempotent */
       }
-      if (this.currentState === "connected") {
-        await this.renegotiateAsInviter().catch((err) => this.emit("error", err as Error));
-      }
+      // pc.removeTrack also fires `onnegotiationneeded`; the polite/impolite
+      // dance handles glare with a concurrent remote add.
     };
     return { senderId, kind, remove };
-  }
-
-  private async renegotiateAsInviter(): Promise<void> {
-    if (this.role !== "inviter") return;
-    const pc = this.pc;
-    if (!pc || !this.remotePeerId) return;
-    if (this.renegotiating) return;
-    this.renegotiating = true;
-    try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      if (!offer.sdp) throw new Error("PeerSession: renegotiate createOffer produced no SDP");
-      await this.signaling.publish(this.roomId, {
-        kind: "offer",
-        from: this.localPeerId,
-        sdp: offer.sdp,
-      });
-    } finally {
-      this.renegotiating = false;
-    }
   }
 
   async close(): Promise<void> {
@@ -646,31 +640,42 @@ export class PeerSession {
 
     switch (msg.kind) {
       case "offer": {
-        if (this.role !== "joiner") return;
+        // Perfect negotiation (MDN). Both roles handle incoming offers.
+        const offerCollision =
+          this.makingOffer ||
+          (pc.signalingState !== "stable" && pc.signalingState !== "have-remote-offer");
+        this.ignoreOffer = !this.isPolite && offerCollision;
+        if (this.ignoreOffer) return;
         if (!this.remotePeerId) this.remotePeerId = msg.from;
+        // setRemoteDescription on a polite peer with a colliding local
+        // offer triggers an implicit rollback (modern browsers).
         await pc.setRemoteDescription({ type: "offer", sdp: msg.sdp });
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        if (!answer.sdp) throw new Error("PeerSession: createAnswer() produced no SDP");
+        await pc.setLocalDescription();
+        if (!pc.localDescription || !pc.localDescription.sdp) return;
         await this.signaling.publish(this.roomId, {
           kind: "answer",
           from: this.localPeerId,
           to: this.remotePeerId,
-          sdp: answer.sdp,
+          sdp: pc.localDescription.sdp,
         });
         return;
       }
       case "answer": {
-        if (this.role !== "inviter") return;
+        // Either role may have authored the offer this answers; accept and
+        // tolerate a stale answer arriving after a glare-resolved rollback.
         if (!this.remotePeerId) this.remotePeerId = msg.from;
-        await pc.setRemoteDescription({ type: "answer", sdp: msg.sdp });
+        try {
+          await pc.setRemoteDescription({ type: "answer", sdp: msg.sdp });
+        } catch (err) {
+          if (!this.ignoreOffer) this.emit("error", err as Error);
+        }
         return;
       }
       case "ice": {
         try {
           await pc.addIceCandidate(msg.candidate);
         } catch (err) {
-          this.emit("error", err as Error);
+          if (!this.ignoreOffer) this.emit("error", err as Error);
         }
         return;
       }

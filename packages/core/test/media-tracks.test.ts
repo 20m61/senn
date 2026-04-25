@@ -59,8 +59,10 @@ class FakeRTCPeerConnection {
   static created: FakeRTCPeerConnection[] = [];
   signalingState: RTCSignalingState = "stable";
   connectionState: RTCPeerConnectionState = "new";
+  localDescription: { type: string; sdp: string } | null = null;
   onconnectionstatechange: (() => void) | null = null;
   onicecandidate: ((ev: { candidate: RTCIceCandidate | null }) => void) | null = null;
+  onnegotiationneeded: (() => void) | null = null;
   ontrack: ((ev: { track: { kind: string; id: string }; streams: unknown[] }) => void) | null =
     null;
   ondatachannel:
@@ -90,6 +92,8 @@ class FakeRTCPeerConnection {
     onerror: null;
     onmessage: null;
   } {
+    // Real RTCPeerConnection schedules onnegotiationneeded after addTransceiver-shaped operations.
+    queueMicrotask(() => this.onnegotiationneeded?.());
     return {
       label,
       binaryType: "arraybuffer",
@@ -108,6 +112,7 @@ class FakeRTCPeerConnection {
     stream?: unknown,
   ): { senderToken: string; track: typeof track } {
     this.addedTracks.push({ track, stream });
+    queueMicrotask(() => this.onnegotiationneeded?.());
     return { senderToken: `sender_${this.addedTracks.length}`, track };
   }
 
@@ -127,7 +132,13 @@ class FakeRTCPeerConnection {
     return { type: "answer", sdp: `v=0\r\nfake-answer-${id}\r\n` };
   }
 
-  async setLocalDescription(_desc?: unknown): Promise<void> {
+  async setLocalDescription(desc?: { type?: string; sdp?: string }): Promise<void> {
+    if (desc?.sdp) {
+      this.localDescription = { type: desc.type ?? "offer", sdp: desc.sdp };
+    } else {
+      // Browsers' setLocalDescription() with no args generates a description.
+      this.localDescription = { type: "offer", sdp: "v=0\r\nfake-offer-auto\r\n" };
+    }
     this.signalingState = "have-local-offer";
   }
 
@@ -185,10 +196,11 @@ describe("PeerSession — ADR-0015 stage 1 track surface", () => {
       rtcConfig: RTC_CONFIG,
     });
     await session.start();
-
-    // Initial offer was published as part of start().
+    // Initial offer is now driven by pc.onnegotiationneeded (perfect
+    // negotiation), so let microtasks settle before counting.
+    await new Promise((r) => setTimeout(r, 5));
     const initialOffers = bus.published.filter((p) => p.message.kind === "offer").length;
-    expect(initialOffers).toBe(1);
+    expect(initialOffers).toBeGreaterThanOrEqual(1);
 
     // Move the fake into "connected" state so addLocalTrack triggers
     // renegotiation rather than just queueing.
@@ -222,7 +234,7 @@ describe("PeerSession — ADR-0015 stage 1 track surface", () => {
     await session.close();
   });
 
-  it("addLocalTrack on joiner is rejected (stage 1 inviter-only)", async () => {
+  it("addLocalTrack on joiner now succeeds (perfect negotiation, ADR-0015 follow-up)", async () => {
     const bus = new MockSignalingBus();
     const room = newRoomId();
     const me = newPeerId();
@@ -236,8 +248,13 @@ describe("PeerSession — ADR-0015 stage 1 track surface", () => {
       rtcConfig: RTC_CONFIG,
     });
     await session.start();
-    const fakeTrack = { kind: "audio", id: "x" } as unknown as MediaStreamTrack;
-    await expect(session.addLocalTrack(fakeTrack)).rejects.toThrow(/inviter only/);
+    const pc = FakeRTCPeerConnection.created[0];
+    expect(pc).toBeDefined();
+    if (!pc) return;
+    const fakeTrack = { kind: "audio", id: "joiner-mic" } as unknown as MediaStreamTrack;
+    const sender = await session.addLocalTrack(fakeTrack);
+    expect(pc.addedTracks.map((t) => t.track.id)).toContain("joiner-mic");
+    expect(sender.kind).toBe("audio");
     await session.close();
   });
 

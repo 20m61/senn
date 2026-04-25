@@ -72,7 +72,24 @@ See [docs/overview.md](docs/overview.md) and [docs/architecture.md](docs/archite
 
 ## Status
 
-Pre-alpha / concept stage.
+Pre-alpha. The wire layer is implemented end-to-end:
+
+- 7 packages (`@senn/protocol`, `@senn/core`, `@senn/manifest`,
+  `@senn/storage`, `@senn/addon-runtime`, `@senn/addon-sdk`,
+  `@senn/signaling-{url-fragment,http-poll,nostr}`).
+- 7 official add-ons (echo, whiteboard, avatar-presence, local-vault,
+  voice-meter, voice-call, minimal) signed under the official trust
+  root and shipped through `addons/official/index.json`.
+- 15 ADRs Accepted, 12 normative spec pages, public privacy.md.
+- Conformance gates: typecheck + biome lint + vitest (90+ tests
+  across the 7 packages) + Playwright e2e on Chromium / Firefox /
+  WebKit + manifest validator + forbidden-API grep + sig verifier.
+- A static `pnpm --filter @senn/web build` produces a ~76 KB
+  (gzip 24 KB) JS bundle plus addon assets, deployable to any
+  static host (see `docs/deployment.md`).
+
+API surface and the wire format are still subject to change before
+1.0; ADR amendments will be additive when possible (see ADR-0010 / 0012).
 
 ## License
 
