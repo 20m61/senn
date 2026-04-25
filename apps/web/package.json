@@ -15,6 +15,7 @@
   "dependencies": {
     "@senn/addon-runtime": "workspace:*",
     "@senn/core": "workspace:*",
+    "@senn/manifest": "workspace:*",
     "@senn/protocol": "workspace:*",
     "@senn/signaling-url-fragment": "workspace:*",
     "@senn/storage": "workspace:*",

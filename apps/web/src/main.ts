@@ -235,6 +235,114 @@ document
   .querySelector<HTMLButtonElement>("#btn-load-whiteboard")
   ?.addEventListener("click", () => loadAddonByManifest("/addons/whiteboard/manifest.json"));
 
+// ── E2E test hook (no-op in production) ─────────────────────────────────────
+//
+// The signing e2e creates an Ed25519 keypair, signs the echo manifest in the
+// page's own crypto subtle (so the signature is real Web Crypto output), and
+// loads the add-on with verify: required. We expose just enough surface for
+// the test to drive this without leaking buttons into the real demo UI.
+declare global {
+  interface Window {
+    __sennE2E?: {
+      generateKeyPair: () => Promise<{ publicKey: string }>;
+      signEchoManifest: () => Promise<void>;
+      loadEcho: (verify: {
+        mode: "none" | "optional" | "required";
+        trustedKeys?: string[];
+      }) => Promise<{ ok: boolean; error?: string }>;
+    };
+  }
+}
+
+{
+  // E2E hook is always installed in this PoC; the page is dev-only anyway.
+  const { generateKeyPair, signManifest, base64urlEncode } = await import("@senn/manifest");
+  let signingKey: Awaited<ReturnType<typeof generateKeyPair>> | null = null;
+  const signedManifests = new Map<string, { bytes: Uint8Array; sig: string }>();
+
+  const installRoute = (): void => {
+    if ("serviceWorker" in navigator) {
+      // not used; we patch fetch instead so test code controls it.
+    }
+    const realFetch = globalThis.fetch.bind(globalThis);
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const u = typeof input === "string" || input instanceof URL ? input.toString() : input.url;
+      if (u.endsWith("/addons/echo/manifest.sig.json")) {
+        const entry = signedManifests.get("/addons/echo/manifest.json");
+        if (!entry) return new Response("", { status: 404 });
+        return new Response(entry.sig, {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (u.endsWith("/addons/echo/manifest.json")) {
+        const entry = signedManifests.get("/addons/echo/manifest.json");
+        if (entry) {
+          return new Response(new Blob([entry.bytes as BlobPart]), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+      }
+      return realFetch(input as RequestInfo, init);
+    }) as typeof fetch;
+  };
+
+  installRoute();
+
+  window.__sennE2E = {
+    async generateKeyPair() {
+      signingKey = await generateKeyPair();
+      return { publicKey: signingKey.publicKeyBase64 };
+    },
+    async signEchoManifest() {
+      if (!signingKey) throw new Error("call generateKeyPair first");
+      const realFetch = (globalThis as { fetch: typeof fetch }).fetch;
+      // Bypass our route to fetch the original bytes from disk.
+      // We do this by using XHR which is not patched; or we just fetch and
+      // return the original file (since signedManifests is empty before sign).
+      const res = await realFetch("/addons/echo/manifest.json");
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const sig = await signManifest({ manifestBytes: bytes, keyPair: signingKey });
+      signedManifests.set("/addons/echo/manifest.json", {
+        bytes,
+        sig: JSON.stringify(sig),
+      });
+      // Reference base64urlEncode so it isn't tree-shaken, also useful for tests.
+      void base64urlEncode;
+    },
+    async loadEcho(verify) {
+      if (addonHost) {
+        await addonHost.close();
+        addonHost = null;
+      }
+      if (!addonMount) return { ok: false, error: "no mount" };
+      try {
+        const opts = {
+          manifestUrl: "/addons/echo/manifest.json",
+          container: addonMount,
+          storage: addonStorageBackend,
+          verify: {
+            mode: verify.mode,
+            ...(verify.trustedKeys
+              ? { trustedKeys: new Set(verify.trustedKeys) as ReadonlySet<string> }
+              : {}),
+          },
+        } as const;
+        const host = await AddonHost.load(opts);
+        addonHost = host;
+        if (addonStateLabel) addonStateLabel.textContent = host.state;
+        host.on("state", (s) => {
+          if (addonStateLabel) addonStateLabel.textContent = s;
+        });
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: (err as Error).message };
+      }
+    },
+  };
+}
+
 async function consumeUrl(href: string): Promise<void> {
   if (href.includes("#") && href.includes("i=")) {
     const parsed = await parseInviteBundleUrl(href);

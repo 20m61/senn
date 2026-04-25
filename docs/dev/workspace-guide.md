@@ -21,6 +21,7 @@ senn/
     addon-runtime/              Sandboxed iframe host that runs add-ons inside the host app
     signaling-url-fragment/     Tier-0 reference adapter (out-of-band via URL fragment / QR)
     signaling-http-poll/        Tier-1 reference adapter (HTTP poll against a tiny KV endpoint)
+    manifest/                   Ed25519 manifest signing & verification (Web Crypto)
     storage/                    Local-first storage (IndexedDB / OPFS) per-add-on namespaces
     ui/                         Lightweight UI primitives shared across apps
   addons/
@@ -45,6 +46,7 @@ senn/
 @senn/addon-runtime          depends on: @senn/protocol
 @senn/signaling-url-fragment depends on: @senn/protocol
 @senn/signaling-http-poll    depends on: @senn/protocol
+@senn/manifest               depends on: nothing in this repo
 @senn/core                   depends on: @senn/protocol, @senn/storage, @senn/addon-runtime
 apps/web                     depends on: @senn/core, @senn/protocol, @senn/signaling-url-fragment, @senn/storage, @senn/ui
 addons/official/*            depends on: @senn/addon-sdk only (must run as static add-ons)

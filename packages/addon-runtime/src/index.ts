@@ -9,6 +9,7 @@
  * envelopes and forwarded to the remote peer.
  */
 
+import { type ManifestSignatureV1, validateSignaturePayload, verifyManifest } from "@senn/manifest";
 import {
   type AddonMessageEnvelope,
   tryParseAddonEnvelope,
@@ -97,6 +98,14 @@ export interface AddonHostEvents {
   error: Error;
 }
 
+export type VerifyMode = "none" | "optional" | "required";
+
+export interface AddonHostVerifyOptions {
+  readonly mode: VerifyMode;
+  /** base64url Ed25519 public keys the host trusts. Required for `optional` and `required`. */
+  readonly trustedKeys?: ReadonlySet<string>;
+}
+
 export interface AddonHostOptions {
   readonly manifestUrl: string;
   readonly container: HTMLElement;
@@ -105,6 +114,8 @@ export interface AddonHostOptions {
   readonly storage?: StorageBackend;
   /** Override fetch (used by tests). */
   readonly fetcher?: typeof fetch;
+  /** Manifest-signature verification mode (default: `{ mode: "none" }`). */
+  readonly verify?: AddonHostVerifyOptions;
 }
 
 const ADDON_ID_PATTERN = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
@@ -212,12 +223,61 @@ export class AddonHost {
       opts.manifestUrl,
       globalThis.location?.href ?? "http://senn.invalid/",
     );
+
+    // 1. Fetch the manifest as raw bytes. We MUST verify the bytes
+    //    before parsing them as JSON.
     const res = await fetcher(manifestUrl);
     if (!res.ok) {
       throw new AddonValidationError(`fetch ${manifestUrl} returned ${res.status}`);
     }
-    const json = await res.json();
-    const manifest = validateManifest(json);
+    const manifestBytes = new Uint8Array(await res.arrayBuffer());
+
+    // 2. If verification is requested, fetch and check the signature
+    //    BEFORE deserialising the manifest body.
+    const verify = opts.verify ?? { mode: "none" };
+    if (verify.mode !== "none") {
+      if (!verify.trustedKeys || verify.trustedKeys.size === 0) {
+        throw new AddonValidationError(
+          "verify.trustedKeys is required when verify.mode is not 'none'",
+        );
+      }
+      const sigUrl = new URL("manifest.sig.json", manifestUrl);
+      const sigRes = await fetcher(sigUrl);
+      if (sigRes.status === 404) {
+        if (verify.mode === "required") {
+          throw new AddonValidationError(`required signature missing: ${sigUrl}`);
+        }
+        // optional + absent → accept the unsigned manifest
+      } else if (!sigRes.ok) {
+        throw new AddonValidationError(`fetch ${sigUrl} returned ${sigRes.status}`);
+      } else {
+        let sigPayload: ManifestSignatureV1;
+        try {
+          sigPayload = validateSignaturePayload(await sigRes.json());
+        } catch (err) {
+          throw new AddonValidationError(`signature payload invalid: ${(err as Error).message}`);
+        }
+        const result = await verifyManifest({
+          manifestBytes,
+          signature: sigPayload,
+          trustedKeys: verify.trustedKeys,
+        });
+        if (!result.ok) {
+          throw new AddonValidationError(
+            `signature verification failed: ${result.reason ?? "unknown"}`,
+          );
+        }
+      }
+    }
+
+    // 3. Only after verification, parse + validate the manifest schema.
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(new TextDecoder().decode(manifestBytes));
+    } catch (err) {
+      throw new AddonValidationError(`manifest is not valid JSON: ${(err as Error).message}`);
+    }
+    const manifest = validateManifest(parsed);
     const host = new AddonHost(opts, manifest, manifestUrl);
     host.mount();
     if (host.session) host.bindToSession(host.session);
