@@ -20,6 +20,7 @@ senn/
     addon-sdk/                  Developer SDK for static add-ons
     addon-runtime/              Sandboxed iframe host that runs add-ons inside the host app
     signaling-url-fragment/     Tier-0 reference adapter (out-of-band via URL fragment / QR)
+    signaling-http-poll/        Tier-1 reference adapter (HTTP poll against a tiny KV endpoint)
     storage/                    Local-first storage (IndexedDB / OPFS) per-add-on namespaces
     ui/                         Lightweight UI primitives shared across apps
   addons/
@@ -43,6 +44,7 @@ senn/
 @senn/addon-sdk              depends on: @senn/protocol
 @senn/addon-runtime          depends on: @senn/protocol
 @senn/signaling-url-fragment depends on: @senn/protocol
+@senn/signaling-http-poll    depends on: @senn/protocol
 @senn/core                   depends on: @senn/protocol, @senn/storage, @senn/addon-runtime
 apps/web                     depends on: @senn/core, @senn/protocol, @senn/signaling-url-fragment, @senn/storage, @senn/ui
 addons/official/*            depends on: @senn/addon-sdk only (must run as static add-ons)

@@ -1,0 +1,23 @@
+{
+  "name": "@senn/signaling-http-poll",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tier-1 SENN signaling adapter — HTTP poll against a tiny KV endpoint.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@senn/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.5"
+  }
+}

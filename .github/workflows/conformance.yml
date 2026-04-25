@@ -45,6 +45,9 @@ jobs:
       - name: Validate all manifests
         run: pnpm validate:all-manifests
 
+      - name: Forbidden-API grep on add-ons
+        run: pnpm check:addon-forbidden
+
       - name: Validate invite fixture
         run: pnpm validate:invite examples/invite-roundtrip/payload.json
 

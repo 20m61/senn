@@ -46,7 +46,7 @@ Non-functional requirements:
 | Adapter | Package | Tier | Status |
 |---------|--------|------|--------|
 | URL fragment | `@senn/signaling-url-fragment` | Tier 0 | shipped (see [/docs/signaling-url-fragment-spec.md](../signaling-url-fragment-spec.md)) |
-| HTTP short-poll | `@senn/signaling-http-poll` (planned) | Tier 1 | not started |
+| HTTP short-poll | `@senn/signaling-http-poll` | Tier 1 | shipped (see [/docs/signaling-http-poll-spec.md](../signaling-http-poll-spec.md)) |
 | WebSocket | `@senn/signaling-ws` (planned) | Tier 2 | not started |
 | Nostr relay | `@senn/signaling-nostr` (proposed) | optional | needs ADR |
 | Matrix room | `@senn/signaling-matrix` (proposed) | optional | needs ADR |

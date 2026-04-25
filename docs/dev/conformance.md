@@ -30,7 +30,8 @@ pnpm validate:invite examples/invite-roundtrip/payload.json
 |-------|--------|
 | Invite round-trip | `docs/room-and-invite-spec.md` (encode/decode, URL length, fragment key) |
 | Bundle round-trip | `docs/signaling-url-fragment-spec.md` (encode/decode, message schema) |
-| Adapter unit tests | `pnpm --filter @senn/signaling-url-fragment test` (round-trip, isolation, close, negatives) |
+| Adapter unit tests (URL fragment) | `pnpm --filter @senn/signaling-url-fragment test` (round-trip, isolation, close, negatives) |
+| Adapter contract tests (HTTP poll) | `pnpm --filter @senn/signaling-http-poll test` (round-trip, dedup, server errors, no vendor lock-in) |
 | Browser e2e | `pnpm --filter @senn/web e2e` (Playwright Chromium; real RTCPeerConnection handoff + text exchange + tampered URL + sandboxed add-on echo round-trip) |
 
 When the spec intentionally changes, regenerate the fixture with
@@ -47,7 +48,7 @@ pnpm validate:all-manifests                     # walk addons/ + examples/
 | Check | Guards |
 |-------|--------|
 | Manifest validator | `id`, `version`, `network`, permission strings, capability tags |
-| Forbidden API grep | Add-ons MUST NOT include `fetch`, `WebSocket`, `RTCPeerConnection`, … |
+| Forbidden API grep | `pnpm check:addon-forbidden` — add-ons MUST NOT include `fetch`, `WebSocket`, `RTCPeerConnection`, raw `localStorage`, `eval`, etc. |
 
 Forbidden API grep:
 

@@ -25,6 +25,7 @@
     "validate:all-manifests": "tsx scripts/validate-all-manifests.ts",
     "validate:invite": "tsx scripts/validate-invite.ts",
     "validate:bundle": "tsx scripts/validate-bundle.ts",
+    "check:addon-forbidden": "tsx scripts/check-addon-forbidden-apis.ts",
     "check:licenses": "tsx scripts/check-licenses.ts"
   },
   "devDependencies": {
