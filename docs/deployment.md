@@ -135,6 +135,22 @@ const core = createCore({
 Swap the adapter (and optionally the STUN/TURN list) to move between tiers
 without changing add-on or Core code.
 
+## Embedding into existing sites (WordPress / static CMS)
+
+SENN's web app is just a static deployment, so any site that can drop an
+iframe can host a SENN room. For WordPress in particular,
+[`examples/wordpress-plugin/senn-room`](../examples/wordpress-plugin/senn-room)
+ships a tiny shortcode plugin (~80 LOC) that embeds a deployed SENN app
+into any post. The plugin proxies nothing — the iframe talks WebRTC
+directly to the other peer. Configure the embed with:
+
+```
+[senn-room app="https://senn.example.com/"]
+```
+
+See [`examples/wordpress-plugin/README.md`](../examples/wordpress-plugin/README.md)
+for the iframe sandbox flags and security notes.
+
 ## What SENN does **not** ship
 
 - No hosted signaling endpoint.
