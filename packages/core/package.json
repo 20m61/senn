@@ -12,10 +12,13 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "test": "echo \"no tests yet\""
+    "test": "vitest run"
   },
   "dependencies": {
     "@senn/protocol": "workspace:*",
     "@senn/storage": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.5"
   }
 }

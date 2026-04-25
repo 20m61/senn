@@ -93,6 +93,14 @@
           <button id="btn-mic-toggle" type="button">enable mic for audio.level</button>
           <span id="mic-status" class="muted mono">mic: off</span>
         </div>
+        <div class="row">
+          <button id="btn-call-start" type="button" disabled>
+            ⑤ start mic call (inviter only)
+          </button>
+          <button id="btn-call-stop" type="button" hidden>stop call</button>
+          <span id="call-status" class="muted mono">call: idle</span>
+        </div>
+        <audio id="remote-audio" autoplay playsinline></audio>
 
         <h3>Official registry</h3>
         <p class="muted">

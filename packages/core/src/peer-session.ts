@@ -28,11 +28,25 @@ export interface PeerSessionBinaryMessage {
   readonly bytes: Uint8Array;
 }
 
+export interface PeerSessionRemoteTrack {
+  readonly kind: "audio" | "video";
+  readonly track: MediaStreamTrack;
+  readonly streams: ReadonlyArray<MediaStream>;
+}
+
 export interface PeerSessionEvents {
   state: PeerSessionState;
   text: string;
   binary: PeerSessionBinaryMessage;
+  "remote-track": PeerSessionRemoteTrack;
+  "remote-track-ended": { kind: "audio" | "video"; track: MediaStreamTrack };
   error: Error;
+}
+
+export interface PeerSessionLocalSender {
+  readonly senderId: string;
+  readonly kind: "audio" | "video";
+  remove(): Promise<void>;
 }
 
 export interface PeerSessionOptions {
@@ -91,8 +105,12 @@ export class PeerSession {
     state: new Set(),
     text: new Set(),
     binary: new Set(),
+    "remote-track": new Set(),
+    "remote-track-ended": new Set(),
     error: new Set(),
   };
+  private nextSenderId = 0;
+  private renegotiating = false;
 
   constructor(opts: PeerSessionOptions) {
     this.role = opts.role;
@@ -160,6 +178,12 @@ export class PeerSession {
       if (s === "failed" || s === "closed") {
         if (this.currentState !== "closed") this.setState(s === "failed" ? "failed" : "closed");
       }
+    };
+
+    pc.ontrack = (ev: RTCTrackEvent) => {
+      const kind: "audio" | "video" = ev.track.kind === "video" ? "video" : "audio";
+      this.emit("remote-track", { kind, track: ev.track, streams: ev.streams });
+      ev.track.onended = () => this.emit("remote-track-ended", { kind, track: ev.track });
     };
 
     if (this.role === "inviter") {
@@ -295,6 +319,71 @@ export class PeerSession {
   private newMessageId(): string {
     this.nextSendId = (this.nextSendId + 1) % 0xffffff;
     return `m_${Date.now().toString(36)}_${this.nextSendId.toString(36)}`;
+  }
+
+  /**
+   * Add a local MediaStreamTrack to the peer connection. ADR-0015 stage 1:
+   * inviter-side only. The host owns the track; PeerSession just attaches
+   * it to RTCPeerConnection and triggers a fresh offer/answer cycle through
+   * the existing SignalingTransport. The receiver gets it via the
+   * 'remote-track' event.
+   *
+   * Bidirectional sending will land with the polite/impolite glare rules
+   * in a follow-up; for v1 only the inviter renegotiates so the wire stays
+   * deterministic.
+   */
+  async addLocalTrack(
+    track: MediaStreamTrack,
+    stream?: MediaStream,
+  ): Promise<PeerSessionLocalSender> {
+    if (this.role !== "inviter") {
+      throw new Error("PeerSession.addLocalTrack: stage 1 supports inviter only (ADR-0015)");
+    }
+    if (this.currentState === "closed" || this.currentState === "failed") {
+      throw new Error(`PeerSession.addLocalTrack: session is ${this.currentState}`);
+    }
+    const pc = this.pc;
+    if (!pc) throw new Error("PeerSession.addLocalTrack: no peer connection");
+    const kind: "audio" | "video" = track.kind === "video" ? "video" : "audio";
+    const rtpSender = stream ? pc.addTrack(track, stream) : pc.addTrack(track);
+    this.nextSenderId = (this.nextSenderId + 1) % 0xffffff;
+    const senderId = `s_${this.nextSenderId.toString(36)}`;
+    if (this.currentState === "connected") {
+      // Mid-session add — kick a fresh offer through the existing channel.
+      await this.renegotiateAsInviter();
+    }
+    const remove = async (): Promise<void> => {
+      if (!this.pc) return;
+      try {
+        this.pc.removeTrack(rtpSender);
+      } catch {
+        /* idempotent */
+      }
+      if (this.currentState === "connected") {
+        await this.renegotiateAsInviter().catch((err) => this.emit("error", err as Error));
+      }
+    };
+    return { senderId, kind, remove };
+  }
+
+  private async renegotiateAsInviter(): Promise<void> {
+    if (this.role !== "inviter") return;
+    const pc = this.pc;
+    if (!pc || !this.remotePeerId) return;
+    if (this.renegotiating) return;
+    this.renegotiating = true;
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      if (!offer.sdp) throw new Error("PeerSession: renegotiate createOffer produced no SDP");
+      await this.signaling.publish(this.roomId, {
+        kind: "offer",
+        from: this.localPeerId,
+        sdp: offer.sdp,
+      });
+    } finally {
+      this.renegotiating = false;
+    }
   }
 
   async close(): Promise<void> {

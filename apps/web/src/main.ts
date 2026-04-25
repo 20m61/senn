@@ -130,9 +130,25 @@ function attachSession(s: PeerSession): void {
   s.on("state", (next) => {
     setSessionState(next);
     log(`session: ${next}`);
+    if (callStartBtn) callStartBtn.disabled = next !== "connected" || s.role !== "inviter";
   });
   s.on("text", (msg) => log(`peer text: ${msg}`));
   s.on("error", (err) => log(`session error: ${err.message}`));
+  s.on("remote-track", ({ kind, track, streams }) => {
+    log(`remote-track: ${kind} (${track.id})`);
+    if (kind === "audio" && remoteAudio) {
+      const stream = streams[0] ?? new MediaStream([track]);
+      remoteAudio.srcObject = stream;
+      void remoteAudio.play().catch(() => {
+        // Autoplay may need a user gesture; surface to the user.
+        log("remote-track: autoplay blocked — click the audio element to play");
+      });
+    }
+  });
+  s.on("remote-track-ended", ({ kind }) => {
+    log(`remote-track-ended: ${kind}`);
+    if (kind === "audio" && remoteAudio) remoteAudio.srcObject = null;
+  });
 }
 
 async function resetForRetry(): Promise<void> {
@@ -430,6 +446,21 @@ let micPipeline: AudioCapturePipeline | null = null;
 const micStatusEl = document.querySelector<HTMLElement>("#mic-status");
 const micToggleBtn = document.querySelector<HTMLButtonElement>("#btn-mic-toggle");
 
+const callStartBtn = document.querySelector<HTMLButtonElement>("#btn-call-start");
+const callStopBtn = document.querySelector<HTMLButtonElement>("#btn-call-stop");
+const callStatusEl = document.querySelector<HTMLElement>("#call-status");
+const remoteAudio = document.querySelector<HTMLAudioElement>("#remote-audio");
+
+interface ActiveCall {
+  readonly stream: MediaStream;
+  readonly senders: Awaited<ReturnType<PeerSession["addLocalTrack"]>>[];
+}
+let activeCall: ActiveCall | null = null;
+
+function setCallStatus(text: string): void {
+  if (callStatusEl) callStatusEl.textContent = text;
+}
+
 function setMicStatus(text: string): void {
   if (micStatusEl) micStatusEl.textContent = text;
 }
@@ -497,6 +528,48 @@ micToggleBtn?.addEventListener("click", async () => {
     if (micToggleBtn) micToggleBtn.textContent = "disable mic";
   } catch (err) {
     setMicStatus(`mic: error — ${(err as Error).message}`);
+  }
+});
+
+// ── Cross-peer mic call (ADR-0015 stage 1, inviter-only) ───────────────────
+
+callStartBtn?.addEventListener("click", async () => {
+  if (!session) {
+    setCallStatus("call: no session");
+    return;
+  }
+  if (session.role !== "inviter") {
+    setCallStatus("call: stage 1 supports inviter only");
+    return;
+  }
+  if (activeCall) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const senders: Awaited<ReturnType<PeerSession["addLocalTrack"]>>[] = [];
+    for (const track of stream.getAudioTracks()) {
+      senders.push(await session.addLocalTrack(track, stream));
+    }
+    activeCall = { stream, senders };
+    setCallStatus(`call: live (${senders.length} track${senders.length === 1 ? "" : "s"})`);
+    if (callStartBtn) callStartBtn.hidden = true;
+    if (callStopBtn) callStopBtn.hidden = false;
+  } catch (err) {
+    setCallStatus(`call: error — ${(err as Error).message}`);
+  }
+});
+
+callStopBtn?.addEventListener("click", async () => {
+  if (!activeCall) return;
+  try {
+    for (const sender of activeCall.senders) {
+      await sender.remove().catch(() => undefined);
+    }
+    for (const track of activeCall.stream.getTracks()) track.stop();
+  } finally {
+    activeCall = null;
+    setCallStatus("call: idle");
+    if (callStartBtn) callStartBtn.hidden = false;
+    if (callStopBtn) callStopBtn.hidden = true;
   }
 });
 
