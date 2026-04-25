@@ -51,6 +51,9 @@ jobs:
       - name: Verify official add-on registry signatures
         run: pnpm verify:official
 
+      - name: Verify @senn/addon-sdk package shape (ADR-0018)
+        run: pnpm verify:addon-sdk
+
       - name: Verify shipped addon-sdk runtime is up to date
         run: |
           pnpm build:addon-sdk
