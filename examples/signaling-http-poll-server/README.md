@@ -47,6 +47,16 @@ curl -sS -X POST -H content-type:application/json \
 curl -sS http://localhost:8787/signal/$ROOM
 ```
 
+## Verifying any third-party endpoint against the spec
+
+After deploying your own implementation (PHP, Node, Python, Go, Cloudflare Worker, …), point the spec checker at it:
+
+```sh
+pnpm verify:http-poll-endpoint https://your-host.example/signal
+```
+
+The script drives `@senn/signaling-http-poll` against the URL and asserts the wire contract: a POSTed offer is returned to a polling subscriber, a malformed roomId yields a 4xx, an unknown signaling kind yields a 4xx. Exits 0 on success, non-zero with a precise reason on failure. See [docs/signaling-http-poll-spec.md](../../docs/signaling-http-poll-spec.md) for the full normative contract.
+
 ## What these references intentionally do not provide
 
 - Authentication / room ACLs.

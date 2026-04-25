@@ -31,7 +31,8 @@
     "verify:manifest": "tsx scripts/verify-manifest.ts",
     "verify:official": "tsx scripts/verify-official-addons.ts",
     "sign:all-official": "tsx scripts/sign-all-official.ts",
-    "build:addon-sdk": "tsx scripts/build-addon-sdk.ts"
+    "build:addon-sdk": "tsx scripts/build-addon-sdk.ts",
+    "verify:http-poll-endpoint": "tsx scripts/verify-http-poll-endpoint.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
