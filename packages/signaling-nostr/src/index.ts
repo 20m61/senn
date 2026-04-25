@@ -131,42 +131,53 @@ export class NostrSignaling implements SignalingTransport {
       this.secretKey,
     ) as NostrEvent;
 
-    let pendingRelays = 0;
+    let relayCount = 0;
+    let loopFinalized = false;
+    let lastNackMsg: string | undefined;
+    let finalizeAndCheck: () => void = () => undefined;
     const ackPromise = new Promise<void>((resolve, reject) => {
-      let acked = false;
+      let settled = false;
       let nacked = 0;
       let timer: ReturnType<typeof setTimeout> | null = null;
+      const tryReject = () => {
+        if (settled) return;
+        if (!loopFinalized || nacked < relayCount) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        this.pendingAcks.delete(event.id);
+        reject(new NostrPublishError(lastNackMsg ?? "all relays nacked"));
+      };
       const finish = (ok: boolean, msg?: string) => {
-        if (acked) return;
+        if (settled) return;
         if (ok) {
-          acked = true;
+          settled = true;
           if (timer) clearTimeout(timer);
           this.pendingAcks.delete(event.id);
           resolve();
         } else {
           nacked++;
-          if (nacked >= pendingRelays) {
-            acked = true;
-            if (timer) clearTimeout(timer);
-            this.pendingAcks.delete(event.id);
-            reject(new NostrPublishError(msg ?? "all relays nacked"));
-          }
+          if (typeof msg === "string") lastNackMsg = msg;
+          tryReject();
         }
       };
       this.pendingAcks.set(event.id, finish);
       timer = setTimeout(() => {
-        if (acked) return;
-        acked = true;
+        if (settled) return;
+        settled = true;
         this.pendingAcks.delete(event.id);
         reject(new NostrPublishError("ack timeout"));
       }, this.publishTimeoutMs);
+      finalizeAndCheck = () => {
+        loopFinalized = true;
+        tryReject();
+      };
     });
 
     const frame = JSON.stringify(["EVENT", event]);
     for (const url of this.relays) {
       const ws = await this.ensureSocket(url).catch(() => null);
       if (!ws) continue;
-      pendingRelays++;
+      relayCount++;
       try {
         ws.send(frame);
       } catch {
@@ -175,10 +186,11 @@ export class NostrSignaling implements SignalingTransport {
         cb?.(false, `send failed on ${url}`);
       }
     }
-    if (pendingRelays === 0) {
+    if (relayCount === 0) {
       this.pendingAcks.delete(event.id);
       throw new NostrPublishError("no reachable relay");
     }
+    finalizeAndCheck();
     await ackPromise;
   }
 

@@ -524,15 +524,6 @@ export class PeerSession {
       this.emit("error", new Error("PeerSession.bin: seq/total out of range"));
       return;
     }
-    if (total * BIN_BODY_PER_FRAME > BIN_MESSAGE_MAX_BYTES) {
-      this.emit(
-        "error",
-        new Error(
-          `PeerSession.bin: declared message exceeds cap (${total} frames > ${BIN_MESSAGE_MAX_BYTES}B)`,
-        ),
-      );
-      return;
-    }
     const key = `${addon}${id}`;
     let slot = this.reassembly.get(key);
     if (!slot) {
@@ -560,6 +551,18 @@ export class PeerSession {
     slot.receivedFrames++;
     slot.bytes += body.byteLength;
     this.reassemblyBytes += body.byteLength;
+    if (slot.bytes > BIN_MESSAGE_MAX_BYTES) {
+      this.reassembly.delete(key);
+      this.reassemblyBytes -= slot.bytes;
+      this.maybeStopReassemblyGc();
+      this.emit(
+        "error",
+        new Error(
+          `PeerSession.bin: message exceeds cap (${slot.bytes}B > ${BIN_MESSAGE_MAX_BYTES}B)`,
+        ),
+      );
+      return;
+    }
     this.evictUntilUnderBudget(key);
     if (slot.receivedFrames === slot.total) {
       const out = new Uint8Array(slot.bytes);

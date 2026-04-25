@@ -288,7 +288,7 @@ export class AddonHost {
   private readonly mediaSink: AddonMediaSinkProvider | null;
   private readonly mediaSendSenders = new Map<
     "audio" | "video",
-    { senderId: string; remove: () => Promise<void> }
+    { senderId: string; remove: () => Promise<void>; track: MediaStreamTrack }
   >();
   private mediaReceiveAudio = false;
   private mediaReceiveVideo = false;
@@ -426,10 +426,16 @@ export class AddonHost {
     this.detachPeer?.();
     this.detachPeer = null;
     this.audioLevelSubscribed = false;
-    // Tear down any active local media senders.
+    // Tear down any active local media senders. Stop the underlying track so
+    // the OS mic/camera is released (docs/addon-media-spec.md normative MUST).
     for (const [, sender] of this.mediaSendSenders) {
       try {
         await sender.remove();
+      } catch {
+        /* idempotent */
+      }
+      try {
+        sender.track.stop();
       } catch {
         /* idempotent */
       }
@@ -738,7 +744,7 @@ export class AddonHost {
     }
     try {
       const sender = await this.session.addLocalTrack(track);
-      this.mediaSendSenders.set(kind, { senderId: sender.senderId, remove: sender.remove });
+      this.mediaSendSenders.set(kind, { senderId: sender.senderId, remove: sender.remove, track });
       this.postToIframe({
         kind: ADDON_BRIDGE_KIND,
         op: "media.track",
@@ -760,6 +766,13 @@ export class AddonHost {
       await sender.remove();
     } catch (err) {
       this.emit("error", err as Error);
+    }
+    // pc.removeTrack does not stop the underlying capture device; the host
+    // must stop the track to release the OS mic/camera (docs/addon-media-spec.md).
+    try {
+      sender.track.stop();
+    } catch {
+      /* idempotent */
     }
     this.postToIframe({
       kind: ADDON_BRIDGE_KIND,
