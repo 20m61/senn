@@ -1,0 +1,20 @@
+{
+  "name": "@senn/addon-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Sandboxed iframe runtime that hosts SENN add-ons inside the host app.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "echo \"no tests yet\""
+  },
+  "dependencies": {
+    "@senn/protocol": "workspace:*"
+  }
+}

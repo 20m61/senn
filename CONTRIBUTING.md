@@ -1,0 +1,53 @@
+# Contributing to SENN
+
+Thank you for your interest in SENN. This project is in pre-alpha and the core
+specifications are still evolving — feedback on the design documents in `docs/`
+is as valuable as code contributions.
+
+## Ground Rules
+
+- Read [docs/charter.md](docs/charter.md) and [docs/adr/0001-project-principles.md](docs/adr/0001-project-principles.md) before proposing changes.
+- Open an issue or discussion before starting non-trivial work.
+- Follow [docs/license-policy.md](docs/license-policy.md) for any new dependency.
+- All contributions are licensed under Apache-2.0 (see [LICENSE](LICENSE)).
+- Be kind. We follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## Branch Strategy
+
+- `main` is release-only. Do not commit or push directly.
+- Active work happens on `develop` and topic branches: `feature/*`, `fix/*`, `refactor/*`, `docs/*`, `chore/*`.
+- Releases are merged into `main` via pull request from `develop`.
+
+## Commit Messages
+
+Use Conventional Commits style:
+
+```
+feat: <subject>
+fix: <subject>
+docs: <subject>
+refactor: <subject>
+test: <subject>
+chore: <subject>
+```
+
+Keep subjects short and write the body in English.
+
+## Pull Requests
+
+- Reference related issues.
+- Keep PRs focused; split large changes.
+- Update relevant docs and ADRs when you change behavior or architecture.
+- Ensure manifest validators, license checks, and tests pass.
+
+## Code Style
+
+- TypeScript over JavaScript. `const` > `let`, no `var`.
+- Prefer browser standard APIs over dependencies (see license policy).
+- Format with biome (TS/JS) and ruff (Python tooling).
+
+## Add-on Contributions
+
+If you are submitting an add-on for the official registry, see
+[docs/addon-spec.md](docs/addon-spec.md) for manifest and permission rules,
+and run `scripts/validate-addon-manifest.ts` against your manifest.

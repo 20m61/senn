@@ -1,0 +1,17 @@
+{
+  "name": "@senn/storage",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local-first storage for SENN — IndexedDB and OPFS namespaces per add-on.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "echo \"no tests yet\""
+  }
+}

@@ -1,0 +1,33 @@
+# Architecture Decision Records
+
+This directory holds ADRs for SENN. New ADRs follow the existing template:
+
+```
+# ADR NNNN: <title>
+
+## Status
+Proposed | Accepted | Superseded by ADR-XXXX | Deprecated
+
+## Context
+<what problem are we solving and what constraints apply>
+
+## Decision
+<what we decided>
+
+## Rationale
+<why we made this decision>
+
+## Consequences
+<expected positive and negative outcomes>
+```
+
+## Index
+
+| ID   | Title | Status |
+|------|-------|--------|
+| 0001 | [Project Principles](0001-project-principles.md) | Accepted |
+| 0002 | [License Strategy](0002-license-strategy.md) | Accepted |
+| 0003 | [Add-on Sandbox Model](0003-addon-sandbox-model.md) | Accepted |
+| 0004 | [P2P Transport Strategy](0004-p2p-transport-strategy.md) | Accepted |
+| 0005 | [Local-first Persistence](0005-local-first-persistence.md) | Accepted |
+| 0006 | [Static Add-on Policy](0006-static-addon-policy.md) | Accepted |

@@ -1,0 +1,7 @@
+{
+  "name": "@senn-example/minimal-addon",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Minimal SENN add-on used as a template and runtime test fixture.",
+  "license": "Apache-2.0"
+}

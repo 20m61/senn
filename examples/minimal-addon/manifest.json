@@ -1,0 +1,16 @@
+{
+  "id": "dev.senn.minimal",
+  "name": "Minimal Add-on",
+  "version": "0.0.1",
+  "description": "Smallest possible SENN add-on, used as a template and for runtime tests.",
+  "entry": "index.html",
+  "license": "Apache-2.0",
+  "author": "SENN Project",
+  "network": false,
+  "permissions": [
+    "ui.panel"
+  ],
+  "capabilities": [
+    "minimal-v1"
+  ]
+}
