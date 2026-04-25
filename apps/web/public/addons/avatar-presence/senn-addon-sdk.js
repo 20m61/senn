@@ -30,6 +30,7 @@
     error: new Set(),
   };
   const audioLevelHandlers = new Set();
+  const trackHandlers = new Set();
 
   const emit = (event, value) => {
     const set = listeners[event];
@@ -84,6 +85,17 @@
             fn(msg.level);
           } catch (err) {
             console.error("senn-addon-sdk audio handler threw", err);
+          }
+        }
+        return;
+      }
+      case "media.track": {
+        const event = { direction: msg.direction, track: msg.track, state: msg.state };
+        for (const fn of trackHandlers) {
+          try {
+            fn(event);
+          } catch (err) {
+            console.error("senn-addon-sdk track handler threw", err);
           }
         }
         return;
@@ -158,6 +170,29 @@
           if (audioLevelHandlers.size === 0) {
             post({ kind: KIND, op: "audio.level.unsubscribe" });
           }
+        };
+      },
+    },
+    media: {
+      startLocalAudio: () => post({ kind: KIND, op: "media.send.audio.start" }),
+      stopLocalAudio: () => post({ kind: KIND, op: "media.send.audio.stop" }),
+      startLocalVideo: (opts = {}) => {
+        const m = { kind: KIND, op: "media.send.video.start" };
+        if (opts?.source) m.source = opts.source;
+        post(m);
+      },
+      stopLocalVideo: () => post({ kind: KIND, op: "media.send.video.stop" }),
+      subscribeRemoteAudio: () => post({ kind: KIND, op: "media.receive.audio.subscribe" }),
+      unsubscribeRemoteAudio: () => post({ kind: KIND, op: "media.receive.audio.unsubscribe" }),
+      subscribeRemoteVideo: () => post({ kind: KIND, op: "media.receive.video.subscribe" }),
+      unsubscribeRemoteVideo: () => post({ kind: KIND, op: "media.receive.video.unsubscribe" }),
+      onTrack: (handler) => {
+        if (typeof handler !== "function") {
+          throw new TypeError("senn.media.onTrack: handler must be a function");
+        }
+        trackHandlers.add(handler);
+        return () => {
+          trackHandlers.delete(handler);
         };
       },
     },

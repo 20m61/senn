@@ -1,0 +1,12 @@
+{
+  "id": "dev.senn.voice-call",
+  "name": "Voice Call",
+  "version": "0.1.0",
+  "description": "Reference 1:1 voice call. The host owns getUserMedia; the add-on never sees raw audio. Stage 1 inviter-only sending (ADR-0015).",
+  "entry": "index.html",
+  "license": "Apache-2.0",
+  "author": "SENN Project",
+  "network": false,
+  "permissions": ["media.send.audio", "media.receive.audio", "ui.panel"],
+  "capabilities": ["voice-call-v1"]
+}

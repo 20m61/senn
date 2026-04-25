@@ -379,6 +379,56 @@ let addonHost: AddonHost | null = null;
 const addonStateLabel = document.querySelector<HTMLSpanElement>("#addon-state");
 const addonMount = document.querySelector<HTMLElement>("#addon-mount");
 
+/**
+ * ADR-0015 stage 2: host-supplied mediaCapture / mediaSink for AddonHost.
+ * The host owns getUserMedia + the host-page DOM where remote tracks land;
+ * the addon iframe just asks for them through the bridge.
+ */
+const addonMediaCapture = {
+  async requestAudio(): Promise<MediaStreamTrack | null> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const track = stream.getAudioTracks()[0] ?? null;
+      // Stop the secondary tracks we don't hand to PeerSession.
+      for (const t of stream.getTracks()) if (t !== track) t.stop();
+      return track;
+    } catch (err) {
+      log(`addon mediaCapture audio: ${(err as Error).message}`);
+      return null;
+    }
+  },
+  async requestVideo(
+    opts: { source?: "camera" | "display" } = {},
+  ): Promise<MediaStreamTrack | null> {
+    try {
+      const stream =
+        opts.source === "display"
+          ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+          : await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      const track = stream.getVideoTracks()[0] ?? null;
+      for (const t of stream.getTracks()) if (t !== track) t.stop();
+      return track;
+    } catch (err) {
+      log(`addon mediaCapture video: ${(err as Error).message}`);
+      return null;
+    }
+  },
+};
+
+const addonMediaSink = {
+  attachAudio(track: MediaStreamTrack, streams: ReadonlyArray<MediaStream>): () => void {
+    if (!remoteAudio) return () => undefined;
+    const stream = streams[0] ?? new MediaStream([track]);
+    remoteAudio.srcObject = stream;
+    void remoteAudio.play().catch(() => {
+      log("addon mediaSink: audio autoplay blocked");
+    });
+    return () => {
+      if (remoteAudio?.srcObject === stream) remoteAudio.srcObject = null;
+    };
+  },
+};
+
 async function loadAddonByManifest(
   manifestUrl: string,
   verify?: { mode: "required"; trustedKeys: ReadonlySet<string> },
@@ -393,6 +443,8 @@ async function loadAddonByManifest(
       manifestUrl,
       container: addonMount,
       storage: addonStorageBackend,
+      mediaCapture: addonMediaCapture,
+      mediaSink: addonMediaSink,
       ...(session ? { session } : {}),
       ...(verify ? { verify } : {}),
     };

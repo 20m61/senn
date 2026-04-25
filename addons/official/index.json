@@ -47,6 +47,14 @@
       "capabilities": ["voice-meter-v1"]
     },
     {
+      "id": "dev.senn.voice-call",
+      "name": "Voice Call",
+      "version": "0.1.0",
+      "description": "Reference 1:1 voice call. Asks the host to send mic + receive remote audio via the media.* bridge; the addon never sees raw audio (ADR-0015).",
+      "path": "apps/web/public/addons/voice-call",
+      "capabilities": ["voice-call-v1"]
+    },
+    {
       "id": "dev.senn.minimal",
       "name": "Minimal Add-on",
       "version": "0.0.1",

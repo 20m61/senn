@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'none'; frame-ancestors 'self'"
+    />
+    <title>Voice Call Add-on</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Voice Call</h1>
+      <p>state: <span id="state">booting</span></p>
+      <p class="muted">
+        Reference 1:1 voice call. The add-on never owns the microphone; it asks the host through
+        <code>media.send.audio</code> / <code>media.receive.audio</code>. The host runs
+        <code>getUserMedia</code> and attaches the remote stream to a host-controlled
+        <code>&lt;audio&gt;</code> element.
+      </p>
+      <div class="row">
+        <button id="btn-start" type="button" data-testid="call-start">start sending mic</button>
+        <button id="btn-stop" type="button" data-testid="call-stop" hidden>stop sending mic</button>
+        <button id="btn-listen" type="button" data-testid="call-listen">listen for remote audio</button>
+        <button id="btn-mute" type="button" data-testid="call-mute" hidden>mute remote</button>
+      </div>
+      <ul id="track-log" class="list" data-testid="track-log"></ul>
+    </main>
+    <script src="senn-addon-sdk.js"></script>
+    <script src="addon.js"></script>
+  </body>
+</html>

@@ -1,5 +1,5 @@
 import { InMemoryStorageBackend, type StorageBackend } from "@senn/storage";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ADDON_BRIDGE_KIND, AddonHost } from "../src/index.ts";
 
@@ -35,23 +35,51 @@ function makeFetcher(manifest: object): typeof fetch {
 interface FakePeerLink {
   textSent: string[];
   binarySent: { addon: string; mime: string; bytes: Uint8Array }[];
+  addedTracks: { kind: "audio" | "video"; track: MediaStreamTrack }[];
   textHandler: ((s: string) => void) | null;
   binaryHandler: ((m: { addon: string; mime: string; bytes: Uint8Array }) => void) | null;
+  remoteTrackHandler:
+    | ((m: {
+        kind: "audio" | "video";
+        track: MediaStreamTrack;
+        streams: ReadonlyArray<MediaStream>;
+      }) => void)
+    | null;
   on(event: "text", handler: (s: string) => void): () => void;
   on(
     event: "binary",
     handler: (m: { addon: string; mime: string; bytes: Uint8Array }) => void,
   ): () => void;
+  on(
+    event: "remote-track",
+    handler: (m: {
+      kind: "audio" | "video";
+      track: MediaStreamTrack;
+      streams: ReadonlyArray<MediaStream>;
+    }) => void,
+  ): () => void;
   sendText(message: string): Promise<void>;
   sendBinary(msg: { addon: string; mime: string; bytes: Uint8Array }): Promise<void>;
+  addLocalTrack(
+    track: MediaStreamTrack,
+    stream?: MediaStream,
+  ): Promise<{ senderId: string; kind: "audio" | "video"; remove(): Promise<void> }>;
 }
 
 function makeFakePeerLink(): FakePeerLink {
   const link = {
     textSent: [] as string[],
     binarySent: [] as { addon: string; mime: string; bytes: Uint8Array }[],
+    addedTracks: [] as { kind: "audio" | "video"; track: MediaStreamTrack }[],
     textHandler: null as ((s: string) => void) | null,
     binaryHandler: null as ((m: { addon: string; mime: string; bytes: Uint8Array }) => void) | null,
+    remoteTrackHandler: null as
+      | ((m: {
+          kind: "audio" | "video";
+          track: MediaStreamTrack;
+          streams: ReadonlyArray<MediaStream>;
+        }) => void)
+      | null,
     on(event: string, handler: unknown) {
       if (event === "text") link.textHandler = handler as (s: string) => void;
       if (event === "binary")
@@ -60,9 +88,16 @@ function makeFakePeerLink(): FakePeerLink {
           mime: string;
           bytes: Uint8Array;
         }) => void;
+      if (event === "remote-track")
+        link.remoteTrackHandler = handler as (m: {
+          kind: "audio" | "video";
+          track: MediaStreamTrack;
+          streams: ReadonlyArray<MediaStream>;
+        }) => void;
       return () => {
         if (event === "text") link.textHandler = null;
         if (event === "binary") link.binaryHandler = null;
+        if (event === "remote-track") link.remoteTrackHandler = null;
       };
     },
     async sendText(message: string) {
@@ -70,6 +105,18 @@ function makeFakePeerLink(): FakePeerLink {
     },
     async sendBinary(msg: { addon: string; mime: string; bytes: Uint8Array }) {
       link.binarySent.push(msg);
+    },
+    async addLocalTrack(track: MediaStreamTrack, _stream?: MediaStream) {
+      const kind: "audio" | "video" = track.kind === "video" ? "video" : "audio";
+      link.addedTracks.push({ kind, track });
+      const senderId = `s_${link.addedTracks.length}`;
+      return {
+        senderId,
+        kind,
+        async remove() {
+          /* noop in test */
+        },
+      };
     },
   };
   return link as FakePeerLink;
@@ -348,6 +395,134 @@ describe("@senn/addon-runtime — bridge ops", () => {
     host.publishAudioLevel(0.5);
     win.postMessage = original;
     expect(posted).toBe(0);
+
+    await host.close();
+  });
+
+  // ── ADR-0015 stage 2: media bridge ─────────────────────────────────────
+  it("media.send.audio.start without media.send.audio permission emits permission-denied", async () => {
+    const link = makeFakePeerLink();
+    const { host } = await loadHost({ permissions: ["ui.panel"] }, { peerLink: link });
+    const replyP = captureNextReply(container);
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "media.send.audio.start",
+    });
+    const reply = (await replyP) as { code?: string; op?: string };
+    expect(reply.op).toBe("error");
+    expect(reply.code).toBe("permission-denied");
+    expect(link.addedTracks).toHaveLength(0);
+    await host.close();
+  });
+
+  it("media.send.audio.start with permission but no mediaCapture provider emits device-unavailable", async () => {
+    const link = makeFakePeerLink();
+    const { host } = await loadHost(
+      { permissions: ["ui.panel", "media.send.audio"] },
+      { peerLink: link },
+    );
+    const replyP = captureNextReply(container);
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "media.send.audio.start",
+    });
+    const reply = (await replyP) as { code?: string };
+    expect(reply.code).toBe("device-unavailable");
+    await host.close();
+  });
+
+  it("media.send.audio.start with provider + permission calls peerLink.addLocalTrack and posts media.track added", async () => {
+    const link = makeFakePeerLink();
+    const fakeAudioTrack = { kind: "audio", id: "host-mic" } as unknown as MediaStreamTrack;
+    const requestAudio = vi.fn(async () => fakeAudioTrack);
+    const host = await AddonHost.load({
+      manifestUrl: "https://example.test/addons/test/manifest.json",
+      container,
+      fetcher: makeFetcher({
+        ...VALID_MANIFEST,
+        permissions: ["ui.panel", "media.send.audio"],
+      }),
+      storage,
+      session: link as never,
+      mediaCapture: { requestAudio },
+    });
+
+    const replyP = captureNextReply(container);
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "media.send.audio.start",
+    });
+    const reply = (await replyP) as {
+      op: string;
+      direction: string;
+      track: string;
+      state: string;
+    };
+    expect(requestAudio).toHaveBeenCalledTimes(1);
+    expect(link.addedTracks).toHaveLength(1);
+    expect(link.addedTracks[0]?.kind).toBe("audio");
+    expect(reply).toMatchObject({
+      op: "media.track",
+      direction: "local",
+      track: "audio",
+      state: "added",
+    });
+    await host.close();
+  });
+
+  it("media.receive.audio.subscribe without permission emits permission-denied", async () => {
+    const link = makeFakePeerLink();
+    const { host } = await loadHost({ permissions: ["ui.panel"] }, { peerLink: link });
+    const replyP = captureNextReply(container);
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "media.receive.audio.subscribe",
+    });
+    const reply = (await replyP) as { code?: string };
+    expect(reply.code).toBe("permission-denied");
+    await host.close();
+  });
+
+  it("incoming remote-track is forwarded to mediaSink when subscribed; idle otherwise", async () => {
+    const link = makeFakePeerLink();
+    const attachAudio = vi.fn((_track: MediaStreamTrack) => {
+      return () => {
+        /* detach */
+      };
+    });
+    const host = await AddonHost.load({
+      manifestUrl: "https://example.test/addons/test/manifest.json",
+      container,
+      fetcher: makeFetcher({
+        ...VALID_MANIFEST,
+        permissions: ["ui.panel", "media.receive.audio"],
+      }),
+      storage,
+      session: link as never,
+      mediaSink: { attachAudio },
+    });
+
+    // Before subscribe, an incoming track must NOT reach the sink.
+    const fakeRemote = {
+      kind: "audio" as const,
+      track: {
+        kind: "audio",
+        id: "remote-1",
+        addEventListener: () => {},
+      } as unknown as MediaStreamTrack,
+      streams: [] as ReadonlyArray<MediaStream>,
+    };
+    link.remoteTrackHandler?.(fakeRemote);
+    expect(attachAudio).toHaveBeenCalledTimes(0);
+
+    // Subscribe, then deliver another fake track.
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "media.receive.audio.subscribe",
+    });
+    await flush();
+    link.remoteTrackHandler?.(fakeRemote);
+    expect(attachAudio).toHaveBeenCalledTimes(1);
 
     await host.close();
   });

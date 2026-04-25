@@ -16,9 +16,9 @@ test.describe("Official registry launcher", () => {
       { timeout: SHORT },
     );
 
-    // All six official addons should be listed.
+    // All seven official addons should be listed.
     const rows = page.locator("#registry-list > li");
-    await expect(rows).toHaveCount(6);
+    await expect(rows).toHaveCount(7);
 
     // Each web-mountable addon gets a load button; minimal-addon (under
     // examples/) is skipped with the explanatory note.

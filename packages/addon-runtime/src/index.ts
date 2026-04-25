@@ -28,13 +28,43 @@ import {
  * stays free of any dependency on @senn/core.
  */
 export interface AddonPeerLink {
+  readonly role?: "inviter" | "joiner";
   on(event: "text", handler: (text: string) => void): () => void;
   on(
     event: "binary",
     handler: (msg: { addon: string; mime: string; bytes: Uint8Array }) => void,
   ): () => void;
+  on(
+    event: "remote-track",
+    handler: (msg: {
+      kind: "audio" | "video";
+      track: MediaStreamTrack;
+      streams: ReadonlyArray<MediaStream>;
+    }) => void,
+  ): () => void;
   sendText(message: string): Promise<void>;
   sendBinary(message: { addon: string; mime: string; bytes: Uint8Array }): Promise<void>;
+  /** ADR-0015 stage 1; available on inviter PeerSessions. */
+  addLocalTrack?(
+    track: MediaStreamTrack,
+    stream?: MediaStream,
+  ): Promise<{ senderId: string; kind: "audio" | "video"; remove(): Promise<void> }>;
+}
+
+/**
+ * Host-supplied capture / sink hooks for the media bridge. AddonHost never
+ * calls `getUserMedia` itself (ADR-0015 §2); the host page provides these.
+ * Either side can be omitted — addons whose manifest only lists receive
+ * permissions never need a capture provider, and vice versa.
+ */
+export interface AddonMediaCaptureProvider {
+  requestAudio?: () => Promise<MediaStreamTrack | null>;
+  requestVideo?: (opts: { source?: "camera" | "display" }) => Promise<MediaStreamTrack | null>;
+}
+
+export interface AddonMediaSinkProvider {
+  attachAudio?: (track: MediaStreamTrack, streams: ReadonlyArray<MediaStream>) => () => void;
+  attachVideo?: (track: MediaStreamTrack, streams: ReadonlyArray<MediaStream>) => () => void;
 }
 
 export const SENN_ADDON_RUNTIME_VERSION = "0.0.0";
@@ -67,6 +97,25 @@ export type AddonBridgeMessage =
   | { kind: typeof ADDON_BRIDGE_KIND; op: "audio.level.subscribe" }
   | { kind: typeof ADDON_BRIDGE_KIND; op: "audio.level.unsubscribe" }
   | { kind: typeof ADDON_BRIDGE_KIND; op: "audio.level"; level: number }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "media.send.audio.start" }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "media.send.audio.stop" }
+  | {
+      kind: typeof ADDON_BRIDGE_KIND;
+      op: "media.send.video.start";
+      source?: "camera" | "display";
+    }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "media.send.video.stop" }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "media.receive.audio.subscribe" }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "media.receive.audio.unsubscribe" }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "media.receive.video.subscribe" }
+  | { kind: typeof ADDON_BRIDGE_KIND; op: "media.receive.video.unsubscribe" }
+  | {
+      kind: typeof ADDON_BRIDGE_KIND;
+      op: "media.track";
+      direction: "local" | "remote";
+      track: "audio" | "video";
+      state: "added" | "removed";
+    }
   | {
       kind: typeof ADDON_BRIDGE_KIND;
       op: "storage";
@@ -132,6 +181,10 @@ export interface AddonHostOptions {
   readonly fetcher?: typeof fetch;
   /** Manifest-signature verification mode (default: `{ mode: "none" }`). */
   readonly verify?: AddonHostVerifyOptions;
+  /** ADR-0015: host-supplied getUserMedia gateway. Without it, send-* ops fail. */
+  readonly mediaCapture?: AddonMediaCaptureProvider;
+  /** ADR-0015: host-supplied attach point for incoming tracks. Without it, receive-* ops fail. */
+  readonly mediaSink?: AddonMediaSinkProvider;
 }
 
 const ADDON_ID_PATTERN = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
@@ -231,6 +284,15 @@ export class AddonHost {
   private currentState: AddonHostState = "created";
   private detachPeer: (() => void) | null = null;
   private audioLevelSubscribed = false;
+  private readonly mediaCapture: AddonMediaCaptureProvider | null;
+  private readonly mediaSink: AddonMediaSinkProvider | null;
+  private readonly mediaSendSenders = new Map<
+    "audio" | "video",
+    { senderId: string; remove: () => Promise<void> }
+  >();
+  private mediaReceiveAudio = false;
+  private mediaReceiveVideo = false;
+  private readonly mediaSinkDetachers = new Map<"audio" | "video", () => void>();
   private readonly listeners: {
     [K in keyof AddonHostEvents]: Set<Listener<AddonHostEvents[K]>>;
   } = { state: new Set(), send: new Set(), error: new Set() };
@@ -243,6 +305,8 @@ export class AddonHost {
     this.container = opts.container;
     this.session = opts.session ?? null;
     this.storage = opts.storage ? createAddonStorage(manifest.id, opts.storage) : null;
+    this.mediaCapture = opts.mediaCapture ?? null;
+    this.mediaSink = opts.mediaSink ?? null;
     this.sessionId = newEnvelopeId();
     this.windowMessageHandler = (ev) => this.handleWindowMessage(ev);
   }
@@ -362,6 +426,26 @@ export class AddonHost {
     this.detachPeer?.();
     this.detachPeer = null;
     this.audioLevelSubscribed = false;
+    // Tear down any active local media senders.
+    for (const [, sender] of this.mediaSendSenders) {
+      try {
+        await sender.remove();
+      } catch {
+        /* idempotent */
+      }
+    }
+    this.mediaSendSenders.clear();
+    // Detach any host-side incoming track sinks.
+    for (const [, detach] of this.mediaSinkDetachers) {
+      try {
+        detach();
+      } catch {
+        /* idempotent */
+      }
+    }
+    this.mediaSinkDetachers.clear();
+    this.mediaReceiveAudio = false;
+    this.mediaReceiveVideo = false;
     if (this.iframe) {
       this.iframe.remove();
       this.iframe = null;
@@ -448,6 +532,30 @@ export class AddonHost {
         return;
       case "audio.level.unsubscribe":
         this.audioLevelSubscribed = false;
+        return;
+      case "media.send.audio.start":
+        void this.handleMediaSendStart("audio");
+        return;
+      case "media.send.audio.stop":
+        void this.handleMediaSendStop("audio");
+        return;
+      case "media.send.video.start":
+        void this.handleMediaSendStart("video", msg.source ? { source: msg.source } : {});
+        return;
+      case "media.send.video.stop":
+        void this.handleMediaSendStop("video");
+        return;
+      case "media.receive.audio.subscribe":
+        this.handleMediaReceiveSubscribe("audio");
+        return;
+      case "media.receive.audio.unsubscribe":
+        this.handleMediaReceiveUnsubscribe("audio");
+        return;
+      case "media.receive.video.subscribe":
+        this.handleMediaReceiveSubscribe("video");
+        return;
+      case "media.receive.video.unsubscribe":
+        this.handleMediaReceiveUnsubscribe("video");
         return;
       case "error":
         this.emit("error", new Error(`addon: ${msg.message}`));
@@ -578,6 +686,161 @@ export class AddonHost {
     this.audioLevelSubscribed = true;
   }
 
+  private postBridgeError(code: string, message: string): void {
+    this.postToIframe({ kind: ADDON_BRIDGE_KIND, op: "error", code, message });
+  }
+
+  private async handleMediaSendStart(
+    kind: "audio" | "video",
+    opts: { source?: "camera" | "display" } = {},
+  ): Promise<void> {
+    const perm = kind === "audio" ? "media.send.audio" : "media.send.video";
+    if (!this.manifest.permissions.includes(perm)) {
+      this.postBridgeError("permission-denied", `addon lacks ${perm}`);
+      return;
+    }
+    if (!this.mediaCapture) {
+      this.postBridgeError("device-unavailable", "no host mediaCapture provider configured");
+      return;
+    }
+    if (!this.session?.addLocalTrack) {
+      this.postBridgeError("not-connected", "no peer link with addLocalTrack support");
+      return;
+    }
+    if (this.mediaSendSenders.has(kind)) {
+      // Idempotent — already sending; treat as success.
+      this.postToIframe({
+        kind: ADDON_BRIDGE_KIND,
+        op: "media.track",
+        direction: "local",
+        track: kind,
+        state: "added",
+      });
+      return;
+    }
+    let track: MediaStreamTrack | null = null;
+    try {
+      if (kind === "audio") {
+        track = (await this.mediaCapture.requestAudio?.()) ?? null;
+      } else {
+        const videoOpts: { source?: "camera" | "display" } = opts.source
+          ? { source: opts.source }
+          : {};
+        track = (await this.mediaCapture.requestVideo?.(videoOpts)) ?? null;
+      }
+    } catch (err) {
+      this.postBridgeError("user-denied", (err as Error).message ?? "capture failed");
+      return;
+    }
+    if (!track) {
+      this.postBridgeError("device-unavailable", `host returned no ${kind} track`);
+      return;
+    }
+    try {
+      const sender = await this.session.addLocalTrack(track);
+      this.mediaSendSenders.set(kind, { senderId: sender.senderId, remove: sender.remove });
+      this.postToIframe({
+        kind: ADDON_BRIDGE_KIND,
+        op: "media.track",
+        direction: "local",
+        track: kind,
+        state: "added",
+      });
+    } catch (err) {
+      track.stop();
+      this.postBridgeError("not-connected", (err as Error).message ?? "addLocalTrack failed");
+    }
+  }
+
+  private async handleMediaSendStop(kind: "audio" | "video"): Promise<void> {
+    const sender = this.mediaSendSenders.get(kind);
+    if (!sender) return;
+    this.mediaSendSenders.delete(kind);
+    try {
+      await sender.remove();
+    } catch (err) {
+      this.emit("error", err as Error);
+    }
+    this.postToIframe({
+      kind: ADDON_BRIDGE_KIND,
+      op: "media.track",
+      direction: "local",
+      track: kind,
+      state: "removed",
+    });
+  }
+
+  private handleMediaReceiveSubscribe(kind: "audio" | "video"): void {
+    const perm = kind === "audio" ? "media.receive.audio" : "media.receive.video";
+    if (!this.manifest.permissions.includes(perm)) {
+      this.postBridgeError("permission-denied", `addon lacks ${perm}`);
+      return;
+    }
+    if (!this.mediaSink) {
+      this.postBridgeError("device-unavailable", "no host mediaSink provider configured");
+      return;
+    }
+    if (kind === "audio") this.mediaReceiveAudio = true;
+    else this.mediaReceiveVideo = true;
+  }
+
+  private handleMediaReceiveUnsubscribe(kind: "audio" | "video"): void {
+    if (kind === "audio") this.mediaReceiveAudio = false;
+    else this.mediaReceiveVideo = false;
+    const detach = this.mediaSinkDetachers.get(kind);
+    if (detach) {
+      try {
+        detach();
+      } catch {
+        /* host detacher errors swallowed */
+      }
+      this.mediaSinkDetachers.delete(kind);
+    }
+  }
+
+  private handleRemoteTrack(msg: {
+    kind: "audio" | "video";
+    track: MediaStreamTrack;
+    streams: ReadonlyArray<MediaStream>;
+  }): void {
+    const subscribed = msg.kind === "audio" ? this.mediaReceiveAudio : this.mediaReceiveVideo;
+    if (!subscribed || !this.mediaSink) return;
+    const attach = msg.kind === "audio" ? this.mediaSink.attachAudio : this.mediaSink.attachVideo;
+    if (!attach) return;
+    try {
+      const detach = attach(msg.track, msg.streams);
+      // Replace any prior detacher for this kind.
+      const prior = this.mediaSinkDetachers.get(msg.kind);
+      if (prior) {
+        try {
+          prior();
+        } catch {
+          /* idempotent */
+        }
+      }
+      this.mediaSinkDetachers.set(msg.kind, detach);
+      this.postToIframe({
+        kind: ADDON_BRIDGE_KIND,
+        op: "media.track",
+        direction: "remote",
+        track: msg.kind,
+        state: "added",
+      });
+      msg.track.addEventListener("ended", () => {
+        this.mediaSinkDetachers.delete(msg.kind);
+        this.postToIframe({
+          kind: ADDON_BRIDGE_KIND,
+          op: "media.track",
+          direction: "remote",
+          track: msg.kind,
+          state: "removed",
+        });
+      });
+    } catch (err) {
+      this.emit("error", err as Error);
+    }
+  }
+
   /**
    * Push a microphone-derived audio level into the add-on. Per
    * docs/addon-audio-level-spec.md the level is clamped to [0,1] and only
@@ -660,9 +923,13 @@ export class AddonHost {
         this.emit("error", err as Error);
       });
     });
+    const offRemoteTrack = session.on("remote-track", (msg) => {
+      this.handleRemoteTrack(msg);
+    });
     this.detachPeer = () => {
       offText();
       offBin();
+      offRemoteTrack();
     };
   }
 

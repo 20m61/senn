@@ -40,12 +40,17 @@ const RULES: readonly Rule[] = [
     reason: "add-ons MUST NOT exfiltrate via sendBeacon",
   },
   {
-    pattern: /(?<![.\w])new\s+(RTCPeerConnection|RTCDataChannel)\s*\(/g,
+    pattern: /(?<![.\w])new\s+(RTCPeerConnection|RTCDataChannel|RTCRtpSender|RTCRtpReceiver)\s*\(/g,
     reason: "add-ons MUST NOT take direct WebRTC handles; route through Core",
   },
   {
-    pattern: /(?<![.\w])new\s+MediaStream\s*\(/g,
-    reason: "add-ons MUST NOT construct MediaStreams; voice flows through Core",
+    pattern: /(?<![.\w])new\s+(MediaStream|MediaRecorder|MediaSource)\s*\(/g,
+    reason: "add-ons MUST NOT construct MediaStreams / recorders; media flows through Core",
+  },
+  {
+    pattern: /(?<![.\w])navigator\.mediaDevices\.\s*(getUserMedia|getDisplayMedia)\s*\(/g,
+    reason:
+      "add-ons MUST NOT call getUserMedia / getDisplayMedia; the host owns capture (ADR-0015)",
   },
   {
     pattern: /(?<![.\w])(localStorage|sessionStorage)\s*[.[]/g,

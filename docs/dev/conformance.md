@@ -34,6 +34,7 @@ pnpm validate:invite examples/invite-roundtrip/payload.json
 | Adapter contract tests (HTTP poll) | `pnpm --filter @senn/signaling-http-poll test` (mock + real Node reference server: round-trip, dedup, 4xx surfacing, no vendor lock-in) |
 | Adapter contract tests (Nostr) | `pnpm --filter @senn/signaling-nostr test` (in-process mock relay implementing the NIP-01 frame subset: round-trip, multi-relay dedup, no-relay rejection, fresh ephemeral keypair per construction, kind 25556 + tag-based room routing per ADR-0014) |
 | PeerSession media surface (ADR-0015 stage 1) | `pnpm --filter @senn/core test` — addLocalTrack on inviter calls `pc.addTrack` and triggers a fresh offer; addLocalTrack on joiner is rejected; `pc.ontrack` emits `remote-track`; `sender.remove()` calls `pc.removeTrack` |
+| AddonHost media bridge (ADR-0015 stage 2) | `pnpm --filter @senn/addon-runtime test` — media.send.* / media.receive.* permission gates, mediaCapture provider hook, mediaSink attaches incoming tracks only after subscribe |
 | Storage backend tests | `pnpm --filter @senn/storage test` (in-memory backend: namespacing, quota, length, close, types) |
 | Manifest signing tests | `pnpm --filter @senn/manifest test` (Ed25519 sign/verify round-trip, tampered manifest, untrusted key, schema rejections, keystore PKCS#8 round-trip) |
 | Signing CLI | `pnpm sign:manifest <dir> --generate-key <ks.json>` then `pnpm verify:manifest <dir>` — both exit 0; tampering causes verify to exit non-zero |
