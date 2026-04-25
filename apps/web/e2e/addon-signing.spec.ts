@@ -64,7 +64,7 @@ test.describe("Add-on manifest signing", () => {
 
   test("verify=required rejects an unsigned manifest", async () => {
     const page = await ctx.newPage();
-    await page.goto("/");
+    await page.goto("/?e2e=signing");
     const kp = await generateKeypairInPage(page);
     const result = await loadAddonWithVerify(page, {
       mode: "required",
@@ -76,7 +76,7 @@ test.describe("Add-on manifest signing", () => {
 
   test("verify=required accepts a freshly-signed manifest", async () => {
     const page = await ctx.newPage();
-    await page.goto("/");
+    await page.goto("/?e2e=signing");
     const kp = await generateKeypairInPage(page);
     await signEchoManifest(page);
     const result = await loadAddonWithVerify(page, {
@@ -89,7 +89,7 @@ test.describe("Add-on manifest signing", () => {
 
   test("verify=required rejects when trustedKeys does not include the signer", async () => {
     const page = await ctx.newPage();
-    await page.goto("/");
+    await page.goto("/?e2e=signing");
     await generateKeypairInPage(page);
     await signEchoManifest(page);
     const result = await loadAddonWithVerify(page, {

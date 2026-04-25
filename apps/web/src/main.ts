@@ -864,7 +864,15 @@ declare global {
     }) as typeof fetch;
   };
 
-  installRoute();
+  // The fetch monkey-patch reroutes echo's manifest + sig to a test-driven
+  // in-memory store so addon-signing.spec.ts can sign the manifest in-page
+  // and reload echo against arbitrary trustedKeys. It is invisible to
+  // addons (echo's real manifest.sig.json never gets fetched), but it would
+  // mask the genuine sig for any other test that loads echo. Gate it behind
+  // an explicit `?e2e=signing` opt-in so unrelated tests and production
+  // pages keep the unmodified fetch.
+  const e2eFlag = new URL(globalThis.location.href).searchParams.get("e2e");
+  if (e2eFlag === "signing") installRoute();
 
   window.__sennE2E = {
     async generateKeyPair() {
