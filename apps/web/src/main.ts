@@ -1,4 +1,4 @@
-import { SENN_CORE_VERSION } from "@senn/core";
+import { PeerSession, SENN_CORE_VERSION } from "@senn/core";
 import {
   type InvitePayload,
   type PeerId,
@@ -6,7 +6,6 @@ import {
   SENN_PROTOCOL_VERSION,
   SIGNALING_BUNDLE_VERSION,
   type SignalingBundleV1,
-  type SignalingMessage,
   buildInviteBundleUrl,
   decodeSignalingBundle,
   newPeerId,
@@ -17,15 +16,21 @@ import { UrlFragmentSignaling } from "@senn/signaling-url-fragment";
 
 const transport = new UrlFragmentSignaling();
 const me: PeerId = newPeerId();
+const RTC_CONFIG: RTCConfiguration = {
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+};
+
 let room: RoomId | null = null;
 let remotePeer: PeerId | null = null;
+let session: PeerSession | null = null;
 
 const statusEl = document.querySelector<HTMLElement>("#status");
 const inbox = document.querySelector<HTMLUListElement>("#inbox");
 const roomLabel = document.querySelector<HTMLSpanElement>("#room-id");
 const exportOut = document.querySelector<HTMLTextAreaElement>("#export-out");
 const importIn = document.querySelector<HTMLInputElement>("#import-in");
-const msgKind = document.querySelector<HTMLSelectElement>("#msg-kind");
+const stateLabel = document.querySelector<HTMLSpanElement>("#state");
+const textIn = document.querySelector<HTMLInputElement>("#text-in");
 
 if (statusEl) {
   const line = document.createElement("p");
@@ -47,63 +52,59 @@ function short(id: string): string {
   return `${id.slice(0, 6)}…${id.slice(-4)}`;
 }
 
-function ensureLocalRoom(): RoomId {
-  if (!room) {
-    room = newRoomId();
-    if (roomLabel) roomLabel.textContent = room;
-    transport.subscribe(room, (m) => {
-      remotePeer = m.from === me ? remotePeer : m.from;
-      log(`recv ${m.kind} from ${short(m.from)}`);
-    });
-    log(`room = ${short(room)} (inviter)`);
-  }
+function setSessionState(s: string): void {
+  if (stateLabel) stateLabel.textContent = s;
+}
+
+function attachSession(s: PeerSession): void {
+  session = s;
+  setSessionState(s.state);
+  s.on("state", (next) => {
+    setSessionState(next);
+    log(`session: ${next}`);
+  });
+  s.on("text", (msg) => log(`peer text: ${msg}`));
+  s.on("error", (err) => log(`session error: ${err.message}`));
+}
+
+async function startInviter(): Promise<RoomId> {
+  if (room) return room;
+  room = newRoomId();
+  if (roomLabel) roomLabel.textContent = room;
+  log(`room = ${short(room)} (inviter)`);
+  const s = new PeerSession({
+    role: "inviter",
+    roomId: room,
+    localPeerId: me,
+    remotePeerId: null,
+    signaling: transport,
+    rtcConfig: RTC_CONFIG,
+  });
+  attachSession(s);
+  await s.start();
   return room;
 }
 
-function joinRemoteRoom(invite: InvitePayload): void {
+async function startJoiner(invite: InvitePayload): Promise<void> {
   if (room && room !== invite.roomId) {
     log(`ignoring invite for a different room ${short(invite.roomId)}`);
     return;
   }
-  if (!room) {
-    room = invite.roomId;
-    remotePeer = invite.from;
-    if (roomLabel) roomLabel.textContent = room;
-    transport.subscribe(room, (m) => log(`recv ${m.kind} from ${short(m.from)}`));
-    log(`room = ${short(room)} (joiner; inviter = ${short(invite.from)})`);
-  }
-}
-
-function buildMessage(kind: string, peer: PeerId): SignalingMessage {
-  switch (kind) {
-    case "offer":
-      return { kind: "offer", from: peer, sdp: "v=0\r\no=- 1 1 IN IP4 0.0.0.0\r\n" };
-    case "answer": {
-      const to = remotePeer ?? peer;
-      return {
-        kind: "answer",
-        from: peer,
-        to,
-        sdp: "v=0\r\no=- 2 2 IN IP4 0.0.0.0\r\n",
-      };
-    }
-    case "ice": {
-      const to = remotePeer ?? peer;
-      return {
-        kind: "ice",
-        from: peer,
-        to,
-        candidate: {
-          candidate: "candidate:demo 1 UDP 1 1.1.1.1 1 typ host",
-          sdpMLineIndex: 0,
-        },
-      };
-    }
-    case "bye":
-      return { kind: "bye", from: peer };
-    default:
-      throw new Error(`unknown kind ${kind}`);
-  }
+  if (room) return;
+  room = invite.roomId;
+  remotePeer = invite.from;
+  if (roomLabel) roomLabel.textContent = room;
+  log(`room = ${short(room)} (joiner; inviter = ${short(invite.from)})`);
+  const s = new PeerSession({
+    role: "joiner",
+    roomId: room,
+    localPeerId: me,
+    remotePeerId: invite.from,
+    signaling: transport,
+    rtcConfig: RTC_CONFIG,
+  });
+  attachSession(s);
+  await s.start();
 }
 
 async function composeExportUrl(): Promise<string | null> {
@@ -111,8 +112,7 @@ async function composeExportUrl(): Promise<string | null> {
   if (!r) return null;
   const encoded = await transport.exportBundle(r);
   if (!encoded) return "";
-  // First hop from the inviter: include #i= too, so the joiner learns the room.
-  const isFirstHop = remotePeer === null && r === room;
+  const isFirstHop = remotePeer === null && session?.role === "inviter";
   if (isFirstHop) {
     const invite: InvitePayload = {
       v: 1,
@@ -132,16 +132,15 @@ async function composeExportUrl(): Promise<string | null> {
   return `${location.origin}${location.pathname}#${UrlFragmentSignaling.toFragment(encoded)}`;
 }
 
-document.querySelector<HTMLButtonElement>("#btn-create-room")?.addEventListener("click", () => {
-  ensureLocalRoom();
-});
-
-document.querySelector<HTMLButtonElement>("#btn-publish")?.addEventListener("click", async () => {
-  const r = room ?? ensureLocalRoom();
-  const kind = msgKind?.value ?? "offer";
-  await transport.publish(r, buildMessage(kind, me));
-  log(`sent ${kind}`);
-});
+document
+  .querySelector<HTMLButtonElement>("#btn-create-room")
+  ?.addEventListener("click", async () => {
+    try {
+      await startInviter();
+    } catch (err) {
+      log(`start error: ${(err as Error).message}`);
+    }
+  });
 
 document.querySelector<HTMLButtonElement>("#btn-export")?.addEventListener("click", async () => {
   let url: string | null;
@@ -157,7 +156,7 @@ document.querySelector<HTMLButtonElement>("#btn-export")?.addEventListener("clic
     return;
   }
   if (url === "") {
-    exportOut.value = "(outbox empty — publish a message first)";
+    exportOut.value = "(outbox empty)";
     return;
   }
   exportOut.value = url;
@@ -176,31 +175,41 @@ document.querySelector<HTMLButtonElement>("#btn-import")?.addEventListener("clic
   importIn.value = "";
 });
 
+document.querySelector<HTMLButtonElement>("#btn-send-text")?.addEventListener("click", async () => {
+  if (!session || !textIn) return;
+  const value = textIn.value;
+  if (!value) return;
+  try {
+    await session.sendText(value);
+    log(`me text: ${value}`);
+    textIn.value = "";
+  } catch (err) {
+    log(`send error: ${(err as Error).message}`);
+  }
+});
+
 async function consumeUrl(href: string): Promise<void> {
-  // Prefer the combined parser when #i= is present.
   if (href.includes("#") && href.includes("i=")) {
     const parsed = await parseInviteBundleUrl(href);
-    joinRemoteRoom(parsed.invite);
+    await startJoiner(parsed.invite);
     if (parsed.bundle) {
       const encoded = UrlFragmentSignaling.fromUrl(href);
       if (encoded) {
         const r = await transport.importBundle(encoded);
-        log(`imported ${r.delivered} message(s) via invite URL`);
+        log(`imported ${r.delivered} signaling message(s) via invite URL`);
       }
     }
     return;
   }
-  // Otherwise treat as a plain #s=…
   const encoded = UrlFragmentSignaling.fromUrl(href) ?? href;
   if (!room) {
     log("cannot import bundle — no active room (join via an invite URL first)");
     return;
   }
   const r = await transport.importBundle(encoded);
-  log(`imported ${r.delivered} message(s) for ${short(r.roomId)}`);
+  log(`imported ${r.delivered} signaling message(s) for ${short(r.roomId)}`);
 }
 
-// Auto-consume any URL the page was opened with.
 if (location.hash.includes("i=") || location.hash.includes("s=")) {
   consumeUrl(location.href).catch((err) => log(`auto-import error: ${(err as Error).message}`));
 }

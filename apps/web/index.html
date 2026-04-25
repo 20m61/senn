@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SENN — Tier 0 signaling demo</title>
+    <title>SENN — Tier 0 PeerSession demo</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -16,42 +16,49 @@
       <section id="status" aria-live="polite"></section>
 
       <section class="demo">
-        <h2>Tier 0 signaling demo</h2>
+        <h2>Tier 0 PeerSession demo</h2>
         <p class="muted">
-          Open this page in two tabs. On the <strong>inviter</strong> tab: create a room, publish
-          an <code>offer</code>, export — the URL will carry both <code>#i=…&amp;s=…</code>. Open
-          that URL in the second tab (<strong>joiner</strong>); it auto-joins and consumes the
-          offer. The joiner then publishes an <code>answer</code> and exports a reply URL
-          (<code>#s=…</code>) to paste back. No server is contacted.
+          Inviter tab: <strong>① Create room</strong>. SENN Core builds an offer through
+          <code>RTCPeerConnection</code> and the URL-fragment signaling adapter buffers it. Click
+          <strong>② export URL</strong> to copy the resulting <code>#i=…&amp;s=…</code> URL.
+          Joiner tab: open that URL — the page auto-joins, accepts the offer, builds an answer, and
+          buffers it. Click <strong>② export URL</strong> again, paste back into the inviter's
+          <strong>③ import</strong> field. ICE candidates round-trip through additional
+          export/import cycles until the data channel reaches <code>connected</code>. Then either
+          side can send free text via <strong>④ send</strong>.
         </p>
 
         <div class="row">
           <button id="btn-create-room">① Create room (inviter)</button>
           <span id="room-id" class="mono"></span>
+          <span class="muted">state: <span id="state" class="mono">idle</span></span>
         </div>
 
         <div class="row">
-          <label>
-            ② Compose a signaling message:
-            <select id="msg-kind">
-              <option value="offer">offer</option>
-              <option value="answer">answer</option>
-              <option value="ice">ice</option>
-              <option value="bye">bye</option>
-            </select>
-          </label>
-          <button id="btn-publish">publish</button>
-          <button id="btn-export">export URL</button>
+          <button id="btn-export">② export URL</button>
+          <button id="btn-import">③ import paste</button>
         </div>
 
-        <textarea id="export-out" rows="3" readonly placeholder="exported URL appears here"></textarea>
+        <textarea
+          id="export-out"
+          rows="3"
+          readonly
+          placeholder="exported URL appears here"
+        ></textarea>
 
         <div class="row">
           <label class="grow">
-            ③ Paste a URL from the other tab:
-            <input id="import-in" type="text" placeholder="https://…/#i=…&amp;s=…" />
+            paste URL from the other tab:
+            <input id="import-in" type="text" placeholder="https://…/#i=…&amp;s=… or #s=…" />
           </label>
-          <button id="btn-import">import</button>
+        </div>
+
+        <div class="row">
+          <label class="grow">
+            ④ once connected, send text:
+            <input id="text-in" type="text" placeholder="hello" />
+          </label>
+          <button id="btn-send-text">send</button>
         </div>
 
         <h3>Log</h3>

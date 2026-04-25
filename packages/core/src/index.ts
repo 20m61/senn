@@ -1,3 +1,9 @@
 export const SENN_CORE_VERSION = "0.0.0";
 
-export type RoomId = string & { readonly __brand: "RoomId" };
+export { PeerSession } from "./peer-session.js";
+export type {
+  PeerSessionEvents,
+  PeerSessionOptions,
+  PeerSessionRole,
+  PeerSessionState,
+} from "./peer-session.js";

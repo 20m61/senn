@@ -53,6 +53,7 @@ bottom of each page before declaring your work done.
 | [/docs/addon-manifest.md](../addon-manifest.md) | add-on devs, AI coders | normative schema |
 | [/docs/room-and-invite-spec.md](../room-and-invite-spec.md) | core + signaling adapter devs | normative schema |
 | [/docs/signaling-url-fragment-spec.md](../signaling-url-fragment-spec.md) | signaling adapter devs | normative schema |
+| [/docs/peer-session-spec.md](../peer-session-spec.md) | core devs | normative |
 | [/docs/security-model.md](../security-model.md) | everyone | normative |
 | [/docs/license-policy.md](../license-policy.md) | dependency reviewers | normative |
 | [/docs/adr/](../adr/) | maintainers | source of decisions |
