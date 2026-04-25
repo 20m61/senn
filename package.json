@@ -29,7 +29,8 @@
     "check:licenses": "tsx scripts/check-licenses.ts",
     "sign:manifest": "tsx scripts/sign-manifest.ts",
     "verify:manifest": "tsx scripts/verify-manifest.ts",
-    "verify:official": "tsx scripts/verify-official-addons.ts"
+    "verify:official": "tsx scripts/verify-official-addons.ts",
+    "sign:all-official": "tsx scripts/sign-all-official.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",

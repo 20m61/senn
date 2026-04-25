@@ -36,6 +36,7 @@ pnpm validate:invite examples/invite-roundtrip/payload.json
 | Manifest signing tests | `pnpm --filter @senn/manifest test` (Ed25519 sign/verify round-trip, tampered manifest, untrusted key, schema rejections, keystore PKCS#8 round-trip) |
 | Signing CLI | `pnpm sign:manifest <dir> --generate-key <ks.json>` then `pnpm verify:manifest <dir>` — both exit 0; tampering causes verify to exit non-zero |
 | Official registry | `pnpm verify:official` — every add-on listed in `addons/official/index.json` has a `manifest.sig.json` whose key is in `trustedKeys` and whose bytes match the served `manifest.json` |
+| Registry re-sign | `pnpm sign:all-official <keystore>` — re-signs every add-on listed in the registry with the supplied keystore; refuses to run if any addon directory is missing `manifest.json`. Used by the rotation runbook (docs/governance.md, ADR-0010) |
 | Browser e2e | `pnpm --filter @senn/web e2e` (Playwright Chromium; RTCPeerConnection handoff + text + tampered URL + echo add-on round-trip + add-on storage persist/reload + namespace + whiteboard P2P stroke + whiteboard snapshot + avatar-presence state-only + manifest signing verify modes + local-vault file pick/save/persist + shipped echo verify=required against official trustedKeys) |
 
 When the spec intentionally changes, regenerate the fixture with

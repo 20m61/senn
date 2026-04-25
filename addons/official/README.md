@@ -48,6 +48,6 @@ pnpm verify:official
 
 The keystore (`*.key.json`) is gitignored per
 [ADR-0009](../../docs/adr/0009-keystore-minimum.md). Holders of the
-official key are listed in
-[`docs/governance.md`](../../docs/governance.md) when that file lands;
-for now, the bootstrap publisher is the repo owner.
+official key, custody rules, and the rotation runbook are in
+[`docs/governance.md`](../../docs/governance.md) (rotation policy:
+[ADR-0010](../../docs/adr/0010-key-rotation.md)).

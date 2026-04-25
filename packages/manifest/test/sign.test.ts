@@ -66,6 +66,41 @@ describe("@senn/manifest — sign/verify round-trip", () => {
     expect(result.ok).toBe(true);
   });
 
+  // Underwrites the rotation overlap window in ADR-0010 / docs/governance.md:
+  // during step 2 of a scheduled rotation, both old and new keys appear in
+  // trustedKeys and a sig from either side MUST verify.
+  it("trustedKeys overlap accepts sigs from any listed key (rotation window)", async () => {
+    const oldKey = await generateKeyPair();
+    const newKey = await generateKeyPair();
+    const trusted = new Set([oldKey.publicKeyBase64, newKey.publicKeyBase64]);
+
+    const sigOld = await signManifest({ manifestBytes: SAMPLE_MANIFEST, keyPair: oldKey });
+    const sigNew = await signManifest({ manifestBytes: SAMPLE_MANIFEST, keyPair: newKey });
+
+    const r1 = await verifyManifest({
+      manifestBytes: SAMPLE_MANIFEST,
+      signature: sigOld,
+      trustedKeys: trusted,
+    });
+    const r2 = await verifyManifest({
+      manifestBytes: SAMPLE_MANIFEST,
+      signature: sigNew,
+      trustedKeys: trusted,
+    });
+    expect(r1.ok).toBe(true);
+    expect(r2.ok).toBe(true);
+
+    // After grace expires, dropping the old key MUST start rejecting old sigs.
+    const shrunken = new Set([newKey.publicKeyBase64]);
+    const r3 = await verifyManifest({
+      manifestBytes: SAMPLE_MANIFEST,
+      signature: sigOld,
+      trustedKeys: shrunken,
+    });
+    expect(r3.ok).toBe(false);
+    expect(r3.reason).toBe("untrusted-key");
+  });
+
   it("validateSignaturePayload rejects unknown alg", () => {
     expect(() =>
       validateSignaturePayload({
