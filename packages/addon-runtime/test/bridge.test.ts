@@ -470,6 +470,92 @@ describe("@senn/addon-runtime — bridge ops", () => {
     await host.close();
   });
 
+  // Regression: docs/addon-media-spec.md normative MUST — host stops the
+  // underlying MediaStreamTrack on media.send.*.stop and on close, so the
+  // browser releases the OS mic/camera even though pc.removeTrack alone
+  // would not.
+  it("media.send.audio.stop calls track.stop() on the underlying capture track", async () => {
+    const link = makeFakePeerLink();
+    const stopSpy = vi.fn();
+    const fakeAudioTrack = {
+      kind: "audio",
+      id: "host-mic",
+      stop: stopSpy,
+    } as unknown as MediaStreamTrack;
+    const host = await AddonHost.load({
+      manifestUrl: "https://example.test/addons/test/manifest.json",
+      container,
+      fetcher: makeFetcher({
+        ...VALID_MANIFEST,
+        permissions: ["ui.panel", "media.send.audio"],
+      }),
+      storage,
+      session: link as never,
+      mediaCapture: { requestAudio: async () => fakeAudioTrack },
+    });
+
+    const startReplyP = captureNextReply(container);
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "media.send.audio.start",
+    });
+    await startReplyP;
+    expect(link.addedTracks).toHaveLength(1);
+
+    const stopReplyP = captureNextReply(container);
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "media.send.audio.stop",
+    });
+    const stopReply = (await stopReplyP) as {
+      op: string;
+      direction: string;
+      track: string;
+      state: string;
+    };
+    expect(stopReply).toMatchObject({
+      op: "media.track",
+      direction: "local",
+      track: "audio",
+      state: "removed",
+    });
+    expect(stopSpy).toHaveBeenCalledTimes(1);
+
+    await host.close();
+  });
+
+  it("AddonHost.close() stops local media tracks still in flight", async () => {
+    const link = makeFakePeerLink();
+    const stopSpy = vi.fn();
+    const fakeAudioTrack = {
+      kind: "audio",
+      id: "host-mic",
+      stop: stopSpy,
+    } as unknown as MediaStreamTrack;
+    const host = await AddonHost.load({
+      manifestUrl: "https://example.test/addons/test/manifest.json",
+      container,
+      fetcher: makeFetcher({
+        ...VALID_MANIFEST,
+        permissions: ["ui.panel", "media.send.audio"],
+      }),
+      storage,
+      session: link as never,
+      mediaCapture: { requestAudio: async () => fakeAudioTrack },
+    });
+
+    const startReplyP = captureNextReply(container);
+    postFromIframe(host, container, {
+      kind: ADDON_BRIDGE_KIND,
+      op: "media.send.audio.start",
+    });
+    await startReplyP;
+
+    expect(stopSpy).not.toHaveBeenCalled();
+    await host.close();
+    expect(stopSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("media.receive.audio.subscribe without permission emits permission-denied", async () => {
     const link = makeFakePeerLink();
     const { host } = await loadHost({ permissions: ["ui.panel"] }, { peerLink: link });

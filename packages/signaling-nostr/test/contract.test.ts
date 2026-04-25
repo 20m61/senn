@@ -217,4 +217,110 @@ describe("@senn/signaling-nostr — contract", () => {
       /at least one relay URL/,
     );
   });
+
+  // Regression for the publish race documented in ADR-0014 §6 / signaling-nostr-spec.md:
+  // publish() must resolve when at least one relay acks, even if a different
+  // relay nacks first. Prior bug: pendingRelays was read mid-loop, so a
+  // synchronous nack from relay A short-circuited before relay B was tried.
+  it("publish resolves when one of two relays nacks and the other acks", async () => {
+    const NACK_URL = "ws://nack-first";
+    const ACK_URL = "ws://ack-second";
+
+    class TwoRelayWS extends EventTarget {
+      static OPEN = 1;
+      static CLOSED = 3;
+      readyState = 0;
+      private readonly url: string;
+      constructor(url: string) {
+        super();
+        this.url = url;
+        queueMicrotask(() => {
+          this.readyState = TwoRelayWS.OPEN;
+          this.dispatchEvent(new Event("open"));
+        });
+      }
+      send(raw: string): void {
+        let frame: unknown;
+        try {
+          frame = JSON.parse(raw);
+        } catch {
+          return;
+        }
+        if (!Array.isArray(frame) || frame[0] !== "EVENT") return;
+        const event = frame[1] as { id: string };
+        const ok = this.url === ACK_URL;
+        const reason = ok ? "" : "nip-42 auth required";
+        queueMicrotask(() => {
+          this.dispatchEvent(
+            new MessageEvent("message", {
+              data: JSON.stringify(["OK", event.id, ok, reason]),
+            }),
+          );
+        });
+      }
+      close(): void {
+        if (this.readyState === TwoRelayWS.CLOSED) return;
+        this.readyState = TwoRelayWS.CLOSED;
+        this.dispatchEvent(new Event("close"));
+      }
+    }
+
+    const tx = new NostrSignaling({
+      relays: [NACK_URL, ACK_URL],
+      wsCtor: TwoRelayWS as unknown as typeof WebSocket,
+      publishTimeoutMs: 1_000,
+    });
+    try {
+      await expect(tx.publish(newRoomId(), offer(newPeerId()))).resolves.toBeUndefined();
+    } finally {
+      await tx.close();
+    }
+  });
+
+  it("publish rejects when every relay nacks, surfacing the relay's reason", async () => {
+    class AllNackWS extends EventTarget {
+      static OPEN = 1;
+      static CLOSED = 3;
+      readyState = 0;
+      constructor(_url: string) {
+        super();
+        queueMicrotask(() => {
+          this.readyState = AllNackWS.OPEN;
+          this.dispatchEvent(new Event("open"));
+        });
+      }
+      send(raw: string): void {
+        let frame: unknown;
+        try {
+          frame = JSON.parse(raw);
+        } catch {
+          return;
+        }
+        if (!Array.isArray(frame) || frame[0] !== "EVENT") return;
+        const event = frame[1] as { id: string };
+        queueMicrotask(() => {
+          this.dispatchEvent(
+            new MessageEvent("message", {
+              data: JSON.stringify(["OK", event.id, false, "rate-limited"]),
+            }),
+          );
+        });
+      }
+      close(): void {
+        if (this.readyState === AllNackWS.CLOSED) return;
+        this.readyState = AllNackWS.CLOSED;
+        this.dispatchEvent(new Event("close"));
+      }
+    }
+    const tx = new NostrSignaling({
+      relays: ["ws://a", "ws://b"],
+      wsCtor: AllNackWS as unknown as typeof WebSocket,
+      publishTimeoutMs: 1_000,
+    });
+    try {
+      await expect(tx.publish(newRoomId(), offer(newPeerId()))).rejects.toThrow(/rate-limited/);
+    } finally {
+      await tx.close();
+    }
+  });
 });

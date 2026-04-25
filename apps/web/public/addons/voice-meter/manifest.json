@@ -2,7 +2,7 @@
   "id": "dev.senn.voice-meter",
   "name": "Voice Meter",
   "version": "0.1.0",
-  "description": "Visualises microphone-derived audio level (0..1) via the audio.level bridge. The add-on never sees raw audio — only the energy values the host computes.",
+  "description": "Visualises microphone-derived audio level via the audio.level bridge — no raw audio is exposed to the add-on.",
   "entry": "index.html",
   "license": "Apache-2.0",
   "author": "SENN Project",

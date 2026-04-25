@@ -2,7 +2,7 @@
   "id": "dev.senn.voice-call",
   "name": "Voice Call",
   "version": "0.1.0",
-  "description": "Reference 1:1 voice call. The host owns getUserMedia; the add-on never sees raw audio. Stage 1 inviter-only sending (ADR-0015).",
+  "description": "Reference 1:1 voice call. Asks the host to send mic + receive remote audio via the media.* bridge; the addon never sees raw audio (ADR-0015).",
   "entry": "index.html",
   "license": "Apache-2.0",
   "author": "SENN Project",

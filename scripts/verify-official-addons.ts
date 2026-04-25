@@ -156,9 +156,15 @@ async function verifyAddon(
       signedAt: sig.signedAt,
     };
   }
-  // Cross-check: the manifest body's id/version must match the registry entry.
+  // Cross-check: the manifest body's id/version/description must match the
+  // registry entry. (Description match catches user-facing copy drift like
+  // the local-vault "64 KiB single-frame" bug ultrareview surfaced.)
   const manifestText = new TextDecoder().decode(manifestBytes);
-  const manifest = JSON.parse(manifestText) as { id?: unknown; version?: unknown };
+  const manifest = JSON.parse(manifestText) as {
+    id?: unknown;
+    version?: unknown;
+    description?: unknown;
+  };
   if (manifest.id !== addon.id) {
     return {
       id: addon.id,
@@ -175,6 +181,16 @@ async function verifyAddon(
       path: addon.path,
       ok: false,
       reason: `manifest.version ${String(manifest.version)} != registry version ${addon.version}`,
+      publicKey: sig.publicKey,
+      signedAt: sig.signedAt,
+    };
+  }
+  if (typeof manifest.description === "string" && manifest.description !== addon.description) {
+    return {
+      id: addon.id,
+      path: addon.path,
+      ok: false,
+      reason: `manifest.description != registry description (manifest=${JSON.stringify(manifest.description)} registry=${JSON.stringify(addon.description)})`,
       publicKey: sig.publicKey,
       signedAt: sig.signedAt,
     };

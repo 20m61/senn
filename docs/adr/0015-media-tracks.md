@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted (design only; implementation deferred to follow-up PRs).
+Implemented. Stage 1 (PeerSession `addLocalTrack` + `remote-track`
+events) landed in commit d32497a; stages 2–5 (host media bridge,
+Addon SDK `senn.media.*`, voice-call reference addon, audit grep)
+landed in 65c3e1c. Bidirectional perfect negotiation followed in
+4cd0b4a, and the host-side `track.stop()` privacy fix landed in
+4bddf5b.
 
 ## Context
 
