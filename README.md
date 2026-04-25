@@ -70,9 +70,26 @@ See [docs/overview.md](docs/overview.md) and [docs/architecture.md](docs/archite
   - [Signaling adapter guide](docs/dev/signaling-adapter.md) · [Deployment tiers](docs/deployment.md)
   - [Conformance](docs/dev/conformance.md) · [Spec authoring](docs/dev/spec-authoring.md) · [Release](docs/dev/release.md)
 
+## Try it locally
+
+```sh
+git clone https://github.com/20m61/senn.git
+cd senn
+pnpm install
+pnpm dev
+```
+
+Open the URL Vite prints (default `http://localhost:5173`) in two
+browser windows, copy the invite link from one to the other, and you
+have a peer-to-peer SENN session — no relay server, no account.
+
+For a deeper walkthrough see
+[docs/dev/getting-started.md](docs/dev/getting-started.md).
+
 ## Status
 
-Pre-alpha. The wire layer is implemented end-to-end:
+[**v0.1.0**](https://github.com/20m61/senn/releases/tag/v0.1.0) — initial
+public release. The wire layer is implemented end-to-end:
 
 - 7 packages (`@senn/protocol`, `@senn/core`, `@senn/manifest`,
   `@senn/storage`, `@senn/addon-runtime`, `@senn/addon-sdk`,
@@ -80,13 +97,15 @@ Pre-alpha. The wire layer is implemented end-to-end:
 - 7 official add-ons (echo, whiteboard, avatar-presence, local-vault,
   voice-meter, voice-call, minimal) signed under the official trust
   root and shipped through `addons/official/index.json`.
-- 15 ADRs Accepted, 12 normative spec pages, public privacy.md.
-- Conformance gates: typecheck + biome lint + vitest (90+ tests
-  across the 7 packages) + Playwright e2e on Chromium / Firefox /
-  WebKit + manifest validator + forbidden-API grep + sig verifier.
+- 15 ADRs Accepted (incl. ADR-0014 federated Nostr signaling and
+  ADR-0015 cross-peer audio + video tracks), 12 normative spec pages,
+  public privacy.md.
+- Conformance gates: typecheck + biome lint + vitest (93 tests across
+  the 7 packages) + Playwright e2e on Chromium / Firefox / WebKit +
+  manifest validator + forbidden-API grep + sig verifier.
 - A static `pnpm --filter @senn/web build` produces a ~76 KB
-  (gzip 24 KB) JS bundle plus addon assets, deployable to any
-  static host (see `docs/deployment.md`).
+  (gzip 24 KB) JS bundle plus addon assets, deployable to any static
+  host (see `docs/deployment.md`).
 
 API surface and the wire format are still subject to change before
 1.0; ADR amendments will be additive when possible (see ADR-0010 / 0012).
