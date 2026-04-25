@@ -1,5 +1,14 @@
 export const SENN_PROTOCOL_VERSION = "0.1.0";
 
+export type {
+  RoomId,
+  SignalingAdapterInfo,
+  SignalingHandler,
+  SignalingMessage,
+  SignalingTransport,
+  Unsubscribe,
+} from "./signaling.ts";
+
 export type MessageKind = "core.message" | "addon.message";
 
 export interface CoreMessageEnvelope {

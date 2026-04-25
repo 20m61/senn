@@ -81,6 +81,13 @@
 Used only to establish peer connections.
 No message content is stored.
 
+Signaling is **pluggable** via the `SignalingTransport` interface in
+`@senn/protocol`. Reference adapters (URL/QR fragment, HTTP short-poll,
+WebSocket, …) live outside Core; host applications choose one at startup.
+SENN Core MUST NOT depend on any specific signaling backend. See
+[ADR-0007](adr/0007-vendor-neutral-signaling-and-relay.md) and
+[deployment.md](deployment.md).
+
 ### TURN Relay
 
 Used only as an explicit fallback if direct P2P fails.
