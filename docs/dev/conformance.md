@@ -32,6 +32,7 @@ pnpm validate:invite examples/invite-roundtrip/payload.json
 | Bundle round-trip | `docs/signaling-url-fragment-spec.md` (encode/decode, message schema) |
 | Adapter unit tests (URL fragment) | `pnpm --filter @senn/signaling-url-fragment test` (round-trip, isolation, close, negatives) |
 | Adapter contract tests (HTTP poll) | `pnpm --filter @senn/signaling-http-poll test` (mock + real Node reference server: round-trip, dedup, 4xx surfacing, no vendor lock-in) |
+| Adapter contract tests (Nostr) | `pnpm --filter @senn/signaling-nostr test` (in-process mock relay implementing the NIP-01 frame subset: round-trip, multi-relay dedup, no-relay rejection, fresh ephemeral keypair per construction, kind 25556 + tag-based room routing per ADR-0014) |
 | Storage backend tests | `pnpm --filter @senn/storage test` (in-memory backend: namespacing, quota, length, close, types) |
 | Manifest signing tests | `pnpm --filter @senn/manifest test` (Ed25519 sign/verify round-trip, tampered manifest, untrusted key, schema rejections, keystore PKCS#8 round-trip) |
 | Signing CLI | `pnpm sign:manifest <dir> --generate-key <ks.json>` then `pnpm verify:manifest <dir>` — both exit 0; tampering causes verify to exit non-zero |

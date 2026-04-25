@@ -10,6 +10,7 @@
     { "path": "packages/core" },
     { "path": "packages/signaling-url-fragment" },
     { "path": "packages/signaling-http-poll" },
+    { "path": "packages/signaling-nostr" },
     { "path": "apps/web" }
   ]
 }

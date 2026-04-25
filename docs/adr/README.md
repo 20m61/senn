@@ -38,3 +38,4 @@ Proposed | Accepted | Superseded by ADR-XXXX | Deprecated
 | 0011 | [Binary peer transfer](0011-binary-peer-transfer.md) | Accepted |
 | 0012 | [Chunked binary peer transfer](0012-chunked-binary-peer-transfer.md) | Accepted |
 | 0013 | [Tier 2 TURN — vendor-neutral relay strategy](0013-tier-2-turn.md) | Accepted |
+| 0014 | [Nostr signaling adapter](0014-signaling-nostr.md) | Accepted |
