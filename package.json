@@ -14,12 +14,6 @@
     "pnpm": ">=9"
   },
   "packageManager": "pnpm@9.12.0",
-  "workspaces": [
-    "packages/*",
-    "apps/*",
-    "addons/official/*",
-    "examples/*"
-  ],
   "scripts": {
     "build": "pnpm -r --if-present build",
     "dev": "pnpm --filter @senn/web dev",

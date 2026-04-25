@@ -7,10 +7,6 @@
   "license": "Apache-2.0",
   "author": "SENN Project",
   "network": false,
-  "permissions": [
-    "ui.panel"
-  ],
-  "capabilities": [
-    "minimal-v1"
-  ]
+  "permissions": ["ui.panel"],
+  "capabilities": ["minimal-v1"]
 }
