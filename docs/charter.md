@@ -42,3 +42,9 @@ SENN is not:
 - A closed app platform.
 - A plugin system where extensions can freely exfiltrate user data.
 - A promise of perfect anonymity.
+
+## See also
+
+- [SENN Privacy](privacy.md) — plain-language statement of what SENN does and does not see, grounded in the specs and ADRs.
+- [Security Model](security-model.md) — technical threats and controls.
+- [ADR Index](adr/README.md) — design decisions.

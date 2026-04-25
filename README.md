@@ -65,7 +65,7 @@ See [docs/overview.md](docs/overview.md) and [docs/architecture.md](docs/archite
 - [docs/dev/](docs/dev/) — entry point for contributors and AI coders
   - [Getting started](docs/dev/getting-started.md)
   - [Workspace guide](docs/dev/workspace-guide.md)
-  - [Writing an add-on](docs/dev/writing-an-addon.md) · [Cookbook](docs/dev/addon-cookbook.md)
+  - [Writing an add-on](docs/dev/writing-an-addon.md) · [Hands-on tutorial](docs/dev/getting-started-addon.md) · [Cookbook](docs/dev/addon-cookbook.md)
   - [AI-driven add-on development](docs/dev/ai-driven-addon-development.md)
   - [Signaling adapter guide](docs/dev/signaling-adapter.md) · [Deployment tiers](docs/deployment.md)
   - [Conformance](docs/dev/conformance.md) · [Spec authoring](docs/dev/spec-authoring.md) · [Release](docs/dev/release.md)

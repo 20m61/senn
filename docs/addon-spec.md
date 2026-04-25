@@ -108,6 +108,17 @@ Allows receiving microphone-derived energy values in `[0, 1]` from
 the host. The add-on never sees raw audio. See
 [addon-audio-level-spec.md](addon-audio-level-spec.md).
 
+### `media.send.audio` / `media.send.video` / `media.receive.audio` / `media.receive.video`
+
+Cross-peer audio and video tracks. The add-on never owns a
+`MediaStreamTrack`; the host captures with `getUserMedia` and the
+add-on places host-rendered `<video>` / `<audio>` elements via
+opaque routing handles. Currently **design only** — see
+[ADR-0015](adr/0015-media-tracks.md) and
+[addon-media-spec.md](addon-media-spec.md). Manifests MAY declare
+these permissions ahead of implementation; the bridge ops will
+land in follow-up PRs.
+
 ## Forbidden
 
 Add-ons must not:

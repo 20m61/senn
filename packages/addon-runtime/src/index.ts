@@ -149,6 +149,12 @@ const KNOWN_PERMISSIONS: ReadonlySet<string> = new Set([
   "ui.overlay",
   "presence.read",
   "audio.level",
+  // ADR-0015 (design only). The runtime accepts these in the manifest now;
+  // bridge ops for media.send.* / media.receive.* land in follow-up PRs.
+  "media.send.audio",
+  "media.send.video",
+  "media.receive.audio",
+  "media.receive.video",
 ]);
 
 // Per-message cap for add-on binary payloads. PeerSession chunks the

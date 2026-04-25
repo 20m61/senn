@@ -31,6 +31,13 @@ export const KNOWN_PERMISSIONS: ReadonlySet<string> = new Set([
   "ui.overlay",
   "presence.read",
   "audio.level",
+  // ADR-0015 (design only). Manifests MAY declare these so authors can ship
+  // ahead of implementation; AddonHost rejects the runtime ops until the
+  // bridge lands.
+  "media.send.audio",
+  "media.send.video",
+  "media.receive.audio",
+  "media.receive.video",
 ]);
 
 export class ManifestValidationError extends Error {
