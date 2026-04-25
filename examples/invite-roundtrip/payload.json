@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "roomId": "01jrmcv3p4n8e7y9w0q5t2k1h6",
+  "from": "01jrmcv3p4abcdefghjkmnpqrs",
+  "protocolVersion": "0.1.0",
+  "capabilities": ["text-v1", "whiteboard-v1"],
+  "note": "studio drop-in"
+}

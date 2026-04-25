@@ -1,13 +1,35 @@
 export const SENN_PROTOCOL_VERSION = "0.1.0";
 
 export type {
-  RoomId,
   SignalingAdapterInfo,
   SignalingHandler,
   SignalingMessage,
   SignalingTransport,
   Unsubscribe,
-} from "./signaling.ts";
+} from "./signaling.js";
+
+export {
+  assertPeerId,
+  assertRoomId,
+  isPeerId,
+  isRoomId,
+  newPeerId,
+  newRoomId,
+} from "./ids.js";
+export type { PeerId, RoomId } from "./ids.js";
+
+export {
+  buildInviteUrl,
+  decodeInvite,
+  encodeInvite,
+  INVITE_FRAGMENT_KEY,
+  INVITE_PAYLOAD_VERSION,
+  INVITE_URL_MAX_LENGTH,
+  InviteValidationError,
+  parseInviteUrl,
+  validateInvitePayload,
+} from "./invite.js";
+export type { InvitePayload } from "./invite.js";
 
 export type MessageKind = "core.message" | "addon.message";
 

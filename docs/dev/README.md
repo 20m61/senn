@@ -51,6 +51,7 @@ bottom of each page before declaring your work done.
 | [/docs/core-spec.md](../core-spec.md) | core + add-on devs | normative |
 | [/docs/addon-spec.md](../addon-spec.md) | add-on devs | normative |
 | [/docs/addon-manifest.md](../addon-manifest.md) | add-on devs, AI coders | normative schema |
+| [/docs/room-and-invite-spec.md](../room-and-invite-spec.md) | core + signaling adapter devs | normative schema |
 | [/docs/security-model.md](../security-model.md) | everyone | normative |
 | [/docs/license-policy.md](../license-policy.md) | dependency reviewers | normative |
 | [/docs/adr/](../adr/) | maintainers | source of decisions |

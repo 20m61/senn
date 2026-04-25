@@ -20,6 +20,20 @@ pnpm lint
 | `pnpm typecheck` | TypeScript project references and the protocol contract |
 | `pnpm lint` (`biome check .`) | Formatting and lints |
 
+## Protocol level
+
+```sh
+pnpm validate:invite examples/invite-roundtrip/payload.json
+```
+
+| Check | Guards |
+|-------|--------|
+| Invite round-trip | `docs/room-and-invite-spec.md` (encode/decode, URL length, fragment key) |
+
+When the spec intentionally changes, regenerate the fixture with
+`pnpm validate:invite <payload> --update` and include both the payload and
+the regenerated `encoded.txt` / `url.txt` in the PR.
+
 ## Add-on level
 
 ```sh

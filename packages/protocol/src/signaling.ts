@@ -6,29 +6,29 @@
  * outside Core. See ADR-0007 and docs/dev/signaling-adapter.md.
  */
 
-export type RoomId = string & { readonly __brand: "RoomId" };
+import type { PeerId, RoomId } from "./ids.js";
 
 export type SignalingMessage =
   | {
       readonly kind: "offer";
-      readonly from: string;
+      readonly from: PeerId;
       readonly sdp: string;
     }
   | {
       readonly kind: "answer";
-      readonly from: string;
-      readonly to: string;
+      readonly from: PeerId;
+      readonly to: PeerId;
       readonly sdp: string;
     }
   | {
       readonly kind: "ice";
-      readonly from: string;
-      readonly to: string;
+      readonly from: PeerId;
+      readonly to: PeerId;
       readonly candidate: RTCIceCandidateInit;
     }
   | {
       readonly kind: "bye";
-      readonly from: string;
+      readonly from: PeerId;
     };
 
 export type SignalingHandler = (msg: SignalingMessage) => void;
@@ -51,6 +51,8 @@ export interface SignalingTransport {
   subscribe(roomId: RoomId, handler: SignalingHandler): Unsubscribe;
   close(): Promise<void>;
 }
+
+export type { PeerId, RoomId };
 
 /** Capability descriptor exposed to host apps for adapter selection. */
 export interface SignalingAdapterInfo {

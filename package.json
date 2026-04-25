@@ -22,6 +22,7 @@
     "format": "biome format --write .",
     "typecheck": "tsc -b --pretty",
     "validate:addon": "tsx scripts/validate-addon-manifest.ts",
+    "validate:invite": "tsx scripts/validate-invite.ts",
     "check:licenses": "tsx scripts/check-licenses.ts"
   },
   "devDependencies": {
