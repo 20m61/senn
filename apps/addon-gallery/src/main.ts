@@ -68,6 +68,28 @@ interface AddonRow {
   readonly signature: ManifestSignatureV1 | null;
   readonly verifyResult: VerifyResult;
   readonly fetchError?: string;
+  // ADR-0017 §3 — when a user-configured URL was a meta-index, this is
+  // the source meta URL the publisher was discovered through.
+  readonly metaSourceUrl?: string;
+  readonly metaSourceName?: string;
+}
+
+// ADR-0017 §3 — PublisherMetaIndexV1.
+interface PublisherEntryV1 {
+  readonly url: string;
+  readonly name?: string;
+  readonly featured?: boolean;
+}
+
+interface PublisherMetaIndexV1 {
+  readonly v: 1;
+  readonly kind: "senn-publisher-meta";
+  readonly publishers: readonly PublisherEntryV1[];
+}
+
+interface MetaSummary {
+  readonly url: string;
+  readonly publisherCount: number;
 }
 
 const LS_REGISTRIES = "senn.gallery.registries";
@@ -164,6 +186,44 @@ async function fetchBytes(url: string): Promise<Uint8Array> {
   return new Uint8Array(await res.arrayBuffer());
 }
 
+function isMetaIndex(value: unknown): value is PublisherMetaIndexV1 {
+  if (typeof value !== "object" || value === null) return false;
+  const o = value as Record<string, unknown>;
+  if (o.v !== 1) return false;
+  if (o.kind !== "senn-publisher-meta") return false;
+  if (!Array.isArray(o.publishers) || o.publishers.length === 0) return false;
+  for (const p of o.publishers) {
+    if (typeof p !== "object" || p === null) return false;
+    if (typeof (p as { url?: unknown }).url !== "string") return false;
+  }
+  return true;
+}
+
+function normalizeMetaIndex(value: PublisherMetaIndexV1): PublisherMetaIndexV1 {
+  const seen = new Set<string>();
+  const publishers: PublisherEntryV1[] = [];
+  for (const p of value.publishers) {
+    if (seen.has(p.url)) continue;
+    try {
+      const parsed = new URL(p.url);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") continue;
+    } catch {
+      continue;
+    }
+    seen.add(p.url);
+    publishers.push({
+      url: p.url,
+      ...(typeof p.name === "string" && p.name.length > 0 && p.name.length <= 80
+        ? { name: p.name }
+        : {}),
+      ...(typeof p.featured === "boolean" ? { featured: p.featured } : {}),
+    });
+  }
+  // Featured publishers come first; original order preserved within groups.
+  publishers.sort((a, b) => Number(b.featured ?? false) - Number(a.featured ?? false));
+  return { v: 1, kind: "senn-publisher-meta", publishers };
+}
+
 function isRegistry(value: unknown): value is RegistryV1 {
   if (typeof value !== "object" || value === null) return false;
   const o = value as Record<string, unknown>;
@@ -188,8 +248,122 @@ function isRegistry(value: unknown): value is RegistryV1 {
   return true;
 }
 
-async function loadRegistry(url: string): Promise<{ registry: RegistryV1; addons: AddonRow[] }> {
+interface LoadOptions {
+  readonly metaSourceUrl?: string;
+  readonly metaSourceName?: string;
+}
+
+async function loadPublisherIndex(
+  url: string,
+  opts: LoadOptions = {},
+): Promise<{ registry: RegistryV1; addons: AddonRow[] }> {
   const value = await fetchJson<unknown>(url);
+  if (isMetaIndex(value)) {
+    throw new Error(
+      `expected a publisher index but received a meta-index at ${url} — meta-of-meta is not supported`,
+    );
+  }
+  if (!isRegistry(value)) throw new Error(`registry schema invalid: ${url}`);
+  const registry = value;
+  const trustedKeys = new Set(registry.trustedKeys);
+  const rows = await Promise.all(
+    registry.addons.map(async (addon): Promise<AddonRow> => {
+      const manifestUrl = manifestUrlFor(url, addon.path);
+      const sigUrl = sigUrlFor(manifestUrl);
+      try {
+        const [manifestBytes, sigJson] = await Promise.all([
+          fetchBytes(manifestUrl),
+          fetchJson<unknown>(sigUrl),
+        ]);
+        const signature = validateSignaturePayload(sigJson);
+        const verifyResult = await verifyManifest({
+          manifestBytes,
+          signature,
+          trustedKeys,
+        });
+        let manifest: AddonManifestV1 | null = null;
+        try {
+          manifest = JSON.parse(new TextDecoder().decode(manifestBytes)) as AddonManifestV1;
+        } catch {
+          /* manifest body parse error surfaces in the card */
+        }
+        return {
+          registryUrl: url,
+          registry,
+          addon,
+          manifestUrl,
+          sigUrl,
+          manifest,
+          signature,
+          verifyResult,
+          ...(opts.metaSourceUrl ? { metaSourceUrl: opts.metaSourceUrl } : {}),
+          ...(opts.metaSourceName ? { metaSourceName: opts.metaSourceName } : {}),
+        };
+      } catch (err) {
+        return {
+          registryUrl: url,
+          registry,
+          addon,
+          manifestUrl,
+          sigUrl,
+          manifest: null,
+          signature: null,
+          verifyResult: { ok: false, reason: "fetch-error" },
+          fetchError: (err as Error).message,
+          ...(opts.metaSourceUrl ? { metaSourceUrl: opts.metaSourceUrl } : {}),
+          ...(opts.metaSourceName ? { metaSourceName: opts.metaSourceName } : {}),
+        };
+      }
+    }),
+  );
+  return { registry, addons: rows };
+}
+
+interface LoadResult {
+  readonly registries: ReadonlyArray<{ url: string; registry: RegistryV1 }>;
+  readonly addons: AddonRow[];
+  readonly meta?: MetaSummary;
+}
+
+async function loadFromUrl(url: string): Promise<LoadResult> {
+  // Fetch once; decide whether it is a meta-index or a publisher index.
+  const value = await fetchJson<unknown>(url);
+  if (isMetaIndex(value)) {
+    const meta = normalizeMetaIndex(value);
+    type Resolved =
+      | { ok: true; url: string; registry: RegistryV1; addons: AddonRow[] }
+      | { ok: false; url: string; error: string };
+    const results: Resolved[] = await Promise.all(
+      meta.publishers.map(async (entry): Promise<Resolved> => {
+        try {
+          const { registry, addons } = await loadPublisherIndex(entry.url, {
+            metaSourceUrl: url,
+            ...(entry.name ? { metaSourceName: entry.name } : {}),
+          });
+          return { ok: true, url: entry.url, registry, addons };
+        } catch (err) {
+          return { ok: false, url: entry.url, error: (err as Error).message };
+        }
+      }),
+    );
+    const registries: Array<{ url: string; registry: RegistryV1 }> = [];
+    const addons: AddonRow[] = [];
+    const errors: string[] = [];
+    for (const r of results) {
+      if (r.ok) {
+        registries.push({ url: r.url, registry: r.registry });
+        addons.push(...r.addons);
+      } else {
+        errors.push(`${r.url}: ${r.error}`);
+      }
+    }
+    if (registries.length === 0) {
+      throw new Error(
+        `meta-index at ${url} resolved no publishers (${errors.join("; ") || "no entries"})`,
+      );
+    }
+    return { registries, addons, meta: { url, publisherCount: meta.publishers.length } };
+  }
   if (!isRegistry(value)) throw new Error(`registry schema invalid: ${url}`);
   const registry = value;
   const trustedKeys = new Set(registry.trustedKeys);
@@ -239,7 +413,7 @@ async function loadRegistry(url: string): Promise<{ registry: RegistryV1; addons
       }
     }),
   );
-  return { registry, addons: rows };
+  return { registries: [{ url, registry }], addons: rows };
 }
 
 interface State {
@@ -248,6 +422,9 @@ interface State {
   rows: AddonRow[];
   registriesByUrl: Map<string, RegistryV1>;
   loadErrors: Map<string, string>;
+  // For each user-configured URL that turned out to be a meta-index, a
+  // summary the registry list can render.
+  metaByUrl: Map<string, MetaSummary>;
 }
 
 const state: State = {
@@ -256,6 +433,7 @@ const state: State = {
   rows: [],
   registriesByUrl: new Map(),
   loadErrors: new Map(),
+  metaByUrl: new Map(),
 };
 
 function $(sel: string): HTMLElement | null {
@@ -277,7 +455,17 @@ function renderRegistryList(): void {
     meta.className = "muted mono";
     const reg = state.registriesByUrl.get(entry.url);
     const err = state.loadErrors.get(entry.url);
-    if (reg) {
+    const metaSummary = state.metaByUrl.get(entry.url);
+    if (metaSummary) {
+      // The user pointed at a meta-index. Annotate the row with the
+      // discovered publisher count; per-publisher rows are not surfaced
+      // separately to keep the list short.
+      const expanded = state.rows
+        .filter((r) => r.metaSourceUrl === entry.url)
+        .reduce((acc, r) => acc.add(r.registryUrl), new Set<string>());
+      meta.dataset.testid = `registry-meta-${encodeURIComponent(entry.url)}`;
+      meta.textContent = `meta-index · ${expanded.size} of ${metaSummary.publisherCount} publishers loaded`;
+    } else if (reg) {
       meta.textContent = `${reg.publisher.name} · ${reg.addons.length} addons · key ${fingerprintKey(reg.trustedKeys[0] ?? "")}`;
     } else if (err) {
       meta.textContent = `error: ${err}`;
@@ -453,9 +641,13 @@ function renderCards(): void {
     const trust = document.createElement("p");
     trust.className = "meta mono";
     const sig = row.signature;
+    const metaTail = row.metaSourceUrl ? ` · via ${row.metaSourceName ?? "meta-index"}` : "";
     trust.textContent = sig
-      ? `signed by ${fingerprintKey(sig.publicKey)} at ${sig.signedAt} · publisher ${row.registry.publisher.name}`
-      : `publisher ${row.registry.publisher.name} · signature ${row.fetchError ? `error: ${row.fetchError}` : "missing"}`;
+      ? `signed by ${fingerprintKey(sig.publicKey)} at ${sig.signedAt} · publisher ${row.registry.publisher.name}${metaTail}`
+      : `publisher ${row.registry.publisher.name}${metaTail} · signature ${row.fetchError ? `error: ${row.fetchError}` : "missing"}`;
+    if (row.metaSourceUrl) {
+      trust.dataset.testid = `addon-meta-source-${row.addon.id}`;
+    }
     li.append(trust);
 
     const actions = document.createElement("div");
@@ -494,14 +686,16 @@ async function refreshAll(): Promise<void> {
   state.rows = [];
   state.registriesByUrl = new Map();
   state.loadErrors = new Map();
+  state.metaByUrl = new Map();
   renderRegistryList();
   renderCards();
 
   for (const entry of state.registries) {
     try {
-      const { registry, addons } = await loadRegistry(entry.url);
-      state.registriesByUrl.set(entry.url, registry);
+      const { registries, addons, meta } = await loadFromUrl(entry.url);
+      for (const r of registries) state.registriesByUrl.set(r.url, r.registry);
       state.rows.push(...addons);
+      if (meta) state.metaByUrl.set(entry.url, meta);
     } catch (err) {
       state.loadErrors.set(entry.url, (err as Error).message);
     }
