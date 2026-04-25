@@ -113,6 +113,59 @@ The add-on never sees a raw `MediaStreamTrack`. ADR-0015 is explicit
 that the host owns `getUserMedia` and the host-controlled `<audio>` /
 `<video>` element; the add-on only orchestrates start / stop / subscribe.
 
+## TypeScript types (RECOMMENDED)
+
+If you author your add-on in TypeScript, depend on `@senn/addon-sdk`
+and let its declarations augment `Window.senn` for you. ADR-0018
+documents the package shape.
+
+```ts
+// addon.ts — compiled to addon.js, loaded after senn-addon-sdk.js
+/// <reference types="@senn/addon-sdk" />
+
+const ctx = await window.senn!.ready();
+window.senn!.peer.send({ kind: "hello", from: ctx.addonId });
+```
+
+A single `/// <reference types="@senn/addon-sdk" />` directive — or any
+`import` from the package — activates the ambient
+`Window.senn?: SennAddonGlobal` declaration. The exported interfaces
+(`SennAddonContext`, `SennDeliverEvent`, `SennAddonStorage`, …) are
+also available for your own helper signatures:
+
+```ts
+import type { SennDeliverEvent, SennAddonContext } from "@senn/addon-sdk";
+
+function onPeerMessage(ev: SennDeliverEvent) { /* … */ }
+function onReady(ctx: SennAddonContext) { /* … */ }
+```
+
+The package also exports the runtime classic-script path so build
+scripts can copy it next to your `addon.js`:
+
+```js
+// build.mjs (Node)
+import { copyFileSync } from "node:fs";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+
+copyFileSync(
+  require.resolve("@senn/addon-sdk/runtime/senn-addon-sdk.js"),
+  "dist/senn-addon-sdk.js",
+);
+```
+
+Add-on `index.html` then loads it as a classic script:
+
+```html
+<script src="senn-addon-sdk.js"></script>
+<script src="addon.js"></script>
+```
+
+`@senn/addon-sdk` is currently a workspace package (not yet published to
+npm); inside this repo you depend on it via `"@senn/addon-sdk":
+"workspace:*"`. A future ADR will own the public publish flow.
+
 ## Forbidden APIs (MUST NOT call)
 
 | Disallowed | Why | Use instead |
