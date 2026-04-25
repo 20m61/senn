@@ -702,6 +702,107 @@ async function renderOfficialRegistry(): Promise<void> {
 
 void renderOfficialRegistry();
 
+// ── ADR-0016 install hand-off ─────────────────────────────────────────────
+//
+// A SENN gallery (or any third-party discovery surface) can deep-link the
+// user into this host with `?addon=<manifestUrl>&publisher=<registryUrl>`.
+// Per ADR-0016 §4 the host MUST display the publisher's name and trusted
+// keys and require a one-click confirmation before loading the add-on
+// under that trust root. We treat `publisher` as a proposal: if missing,
+// we refuse the hand-off — there is no implicit fall-back to no-verify.
+
+function fingerprintKey(b64url: string): string {
+  return b64url.length <= 14 ? b64url : `${b64url.slice(0, 8)}…${b64url.slice(-4)}`;
+}
+
+async function handleHandoff(): Promise<void> {
+  const params = new URL(globalThis.location.href).searchParams;
+  const addonUrl = params.get("addon");
+  const publisherUrl = params.get("publisher");
+  if (!addonUrl) return;
+
+  const section = document.querySelector<HTMLElement>("#handoff");
+  const info = document.querySelector<HTMLDListElement>("#handoff-info");
+  const status = document.querySelector<HTMLElement>("#handoff-status");
+  const confirmBtn = document.querySelector<HTMLButtonElement>("#btn-handoff-confirm");
+  const cancelBtn = document.querySelector<HTMLButtonElement>("#btn-handoff-cancel");
+  if (!section || !info || !confirmBtn || !cancelBtn || !status) return;
+
+  section.hidden = false;
+  info.replaceChildren();
+
+  if (!publisherUrl) {
+    status.textContent = "refused — hand-off URL is missing the publisher parameter";
+    confirmBtn.disabled = true;
+    cancelBtn.addEventListener("click", () => section.remove(), { once: true });
+    return;
+  }
+
+  status.textContent = "fetching publisher registry…";
+
+  let registry: RegistryV1;
+  try {
+    const res = await fetch(publisherUrl, { credentials: "omit" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = (await res.json()) as RegistryV1;
+    if (json.v !== 1 || !Array.isArray(json.trustedKeys) || json.trustedKeys.length === 0) {
+      throw new Error("publisher registry schema invalid");
+    }
+    registry = json;
+  } catch (err) {
+    status.textContent = `refused — cannot load publisher registry: ${(err as Error).message}`;
+    confirmBtn.disabled = true;
+    return;
+  }
+
+  const trustedKeys = new Set(registry.trustedKeys);
+  const rows: [string, string][] = [
+    ["publisher", registry.publisher.name],
+    ["registry", publisherUrl],
+    ["addon", addonUrl],
+    ["trusted keys", [...trustedKeys].map(fingerprintKey).join(", ") || "(none)"],
+  ];
+  for (const [k, v] of rows) {
+    const dt = document.createElement("dt");
+    dt.textContent = k;
+    const dd = document.createElement("dd");
+    dd.textContent = v;
+    info.append(dt, dd);
+  }
+  status.textContent = "ready to load — confirm to mount the add-on";
+
+  cancelBtn.addEventListener(
+    "click",
+    () => {
+      section.hidden = true;
+      // Strip the hand-off params from the URL so a reload does not re-prompt.
+      const u = new URL(globalThis.location.href);
+      u.searchParams.delete("addon");
+      u.searchParams.delete("publisher");
+      globalThis.history.replaceState(null, "", u.toString());
+    },
+    { once: true },
+  );
+
+  confirmBtn.addEventListener(
+    "click",
+    () => {
+      confirmBtn.disabled = true;
+      status.textContent = "loading add-on under publisher trust root…";
+      void loadAddonByManifest(addonUrl, { mode: "required", trustedKeys })
+        .then(() => {
+          status.textContent = `loaded · publisher ${registry.publisher.name}`;
+        })
+        .catch((err) => {
+          status.textContent = `load failed — ${(err as Error).message}`;
+        });
+    },
+    { once: true },
+  );
+}
+
+void handleHandoff();
+
 // ── E2E test hook (no-op in production) ─────────────────────────────────────
 //
 // The signing e2e creates an Ed25519 keypair, signs the echo manifest in the

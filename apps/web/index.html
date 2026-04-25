@@ -15,6 +15,26 @@
 
       <section id="status" aria-live="polite"></section>
 
+      <section id="handoff" hidden data-testid="handoff-section">
+        <h2>Add-on install hand-off</h2>
+        <p class="muted">
+          A SENN gallery has proposed loading an add-on under a publisher's trust root
+          (<a href="https://github.com/20m61/senn/blob/develop/docs/adr/0016-addon-gallery.md">ADR-0016</a>).
+          Review the publisher and key fingerprint before confirming. The add-on will load
+          with <code>verify=required</code> against the publisher's trusted keys.
+        </p>
+        <dl id="handoff-info" class="mono"></dl>
+        <div class="row">
+          <button id="btn-handoff-confirm" type="button" data-testid="handoff-confirm">
+            load this add-on
+          </button>
+          <button id="btn-handoff-cancel" type="button" data-testid="handoff-cancel">
+            cancel
+          </button>
+        </div>
+        <p id="handoff-status" class="muted" aria-live="polite"></p>
+      </section>
+
       <section class="demo">
         <h2>Tier 0 PeerSession demo</h2>
         <p class="muted">
