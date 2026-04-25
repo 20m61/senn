@@ -126,10 +126,31 @@ add-on host could exploit a parser bug before signature validation.
 - A correct signature whose `publicKey` is not in the host's
   `trustedKeys` — **rejected** in `optional` / `required` modes.
 
+## Tooling (CLI)
+
+The repo ships two thin CLIs around `@senn/manifest`:
+
+```sh
+# First-time use: generate a keystore (kept out of git per ADR-0009)
+pnpm sign:manifest <addon-dir> --generate-key keys/myaddon.key.json
+
+# Subsequent signs reuse the keystore
+pnpm sign:manifest <addon-dir> --key keys/myaddon.key.json
+
+# Verify a signature (use --trusted-key when you want to enforce a publisher)
+pnpm verify:manifest <addon-dir> --trusted-key <base64url-public-key>
+```
+
+Both commands operate on the byte content of `manifest.json` — editing
+the manifest after signing invalidates the signature and the verifier
+will reject it. Keystore files (`*.key.json`) are gitignored.
+
 ## Conformance
 
 ```sh
 pnpm --filter @senn/manifest test
+pnpm sign:manifest <addon-dir> --generate-key /tmp/dev.key.json
+pnpm verify:manifest <addon-dir>
 pnpm --filter @senn/web e2e
 ```
 

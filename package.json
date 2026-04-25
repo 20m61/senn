@@ -26,7 +26,9 @@
     "validate:invite": "tsx scripts/validate-invite.ts",
     "validate:bundle": "tsx scripts/validate-bundle.ts",
     "check:addon-forbidden": "tsx scripts/check-addon-forbidden-apis.ts",
-    "check:licenses": "tsx scripts/check-licenses.ts"
+    "check:licenses": "tsx scripts/check-licenses.ts",
+    "sign:manifest": "tsx scripts/sign-manifest.ts",
+    "verify:manifest": "tsx scripts/verify-manifest.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",

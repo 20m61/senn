@@ -145,6 +145,68 @@ export async function importPublicKey(base64url: string): Promise<CryptoKey> {
   ]);
 }
 
+// ── keystore (ADR-0009) ──────────────────────────────────────────────────────
+
+export const KEYSTORE_VERSION = 1 as const;
+
+export interface KeystoreV1 {
+  readonly v: typeof KEYSTORE_VERSION;
+  readonly alg: typeof SIGNATURE_ALG;
+  readonly publicKey: string;
+  /** PKCS#8 SubjectPrivateKeyInfo, base64url. */
+  readonly privateKey: string;
+}
+
+export class KeystoreError extends Error {
+  constructor(message: string) {
+    super(`senn: keystore — ${message}`);
+    this.name = "KeystoreError";
+  }
+}
+
+export async function exportKeystore(kp: SennKeyPair): Promise<KeystoreV1> {
+  const pkcs8 = new Uint8Array(await getCrypto().subtle.exportKey("pkcs8", kp.privateKey));
+  return {
+    v: KEYSTORE_VERSION,
+    alg: SIGNATURE_ALG,
+    publicKey: kp.publicKeyBase64,
+    privateKey: base64urlEncode(pkcs8),
+  };
+}
+
+export async function loadKeystore(value: unknown): Promise<SennKeyPair> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new KeystoreError("not an object");
+  }
+  const obj = value as Record<string, unknown>;
+  if (obj.v !== KEYSTORE_VERSION) throw new KeystoreError(`v must be ${KEYSTORE_VERSION}`);
+  if (obj.alg !== SIGNATURE_ALG) throw new KeystoreError(`alg must be ${SIGNATURE_ALG}`);
+  if (typeof obj.publicKey !== "string" || typeof obj.privateKey !== "string") {
+    throw new KeystoreError("publicKey/privateKey must be strings");
+  }
+  const pubRaw = base64urlDecode(obj.publicKey);
+  if (pubRaw.byteLength !== ED25519_PUBLIC_KEY_BYTES) {
+    throw new KeystoreError("publicKey is not 32 bytes");
+  }
+  const privBytes = base64urlDecode(obj.privateKey);
+  const crypto = getCrypto();
+  const privateKey = await crypto.subtle.importKey(
+    "pkcs8",
+    privBytes as BufferSource,
+    { name: "Ed25519" },
+    true,
+    ["sign"],
+  );
+  const publicKey = await crypto.subtle.importKey(
+    "raw",
+    pubRaw as BufferSource,
+    { name: "Ed25519" },
+    true,
+    ["verify"],
+  );
+  return { publicKey, privateKey, publicKeyBase64: obj.publicKey };
+}
+
 // ── sign / verify ────────────────────────────────────────────────────────────
 
 export interface SignManifestInput {

@@ -33,3 +33,4 @@ Proposed | Accepted | Superseded by ADR-XXXX | Deprecated
 | 0006 | [Static Add-on Policy](0006-static-addon-policy.md) | Accepted |
 | 0007 | [Vendor-neutral signaling and relay](0007-vendor-neutral-signaling-and-relay.md) | Accepted |
 | 0008 | [Manifest signing](0008-manifest-signing.md) | Accepted |
+| 0009 | [Keystore minimum](0009-keystore-minimum.md) | Accepted |
