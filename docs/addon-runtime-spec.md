@@ -1,5 +1,11 @@
 # Add-on Runtime Specification
 
+The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY**
+in this document are to be interpreted as described in [RFC 2119][rfc2119]
+when, and only when, they appear in all capitals.
+
+[rfc2119]: https://www.rfc-editor.org/rfc/rfc2119
+
 ## Intent
 
 Define the runtime contract between SENN Core (host) and a static add-on
@@ -14,7 +20,7 @@ and permission-checked here.
 - The host MUST validate the manifest (per [addon-manifest.md](addon-manifest.md))
   before mounting the iframe. A failed manifest MUST abort the load.
 - The iframe MUST be created with `sandbox="allow-scripts"` and no other
-  flags. `allow-same-origin` is FORBIDDEN.
+  flags. `allow-same-origin` MUST NOT be added.
 - The host MUST set `referrerpolicy="no-referrer"` on the iframe.
 - The host MUST set `iframe.src` to the manifest's `entry` resolved
   against the manifest base URL. The src MUST be same-origin with the
