@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install:*)",
+      "Bash(pnpm dev:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm format:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm validate:addon:*)",
+      "Bash(pnpm validate:all-manifests:*)",
+      "Bash(pnpm validate:invite:*)",
+      "Bash(pnpm validate:bundle:*)",
+      "Bash(pnpm validate:registry:*)",
+      "Bash(pnpm check:addon-forbidden:*)",
+      "Bash(pnpm check:licenses:*)",
+      "Bash(pnpm verify:manifest:*)",
+      "Bash(pnpm verify:official:*)",
+      "Bash(pnpm verify:addon-sdk:*)",
+      "Bash(pnpm verify:http-poll-endpoint:*)",
+      "Bash(pnpm test:registry-schema:*)",
+      "Bash(pnpm build:addon-sdk:*)",
+      "Bash(pnpm build:web-registry:*)",
+      "Bash(pnpm stage:gallery-pages:*)",
+      "Bash(pnpm --filter:*)",
+      "Bash(pnpm -r:*)",
+      "Bash(pnpm exec:*)",
+      "Bash(pnpm tsx:*)",
+      "Bash(pnpm dlx:*)",
+      "Bash(npx playwright:*)",
+      "Bash(node --version:*)",
+      "Bash(pnpm --version:*)",
+      "Bash(pnpm why:*)",
+      "Bash(pnpm list:*)",
+      "Bash(pnpm outdated:*)"
+    ],
+    "deny": [
+      "Read(./keys/**)",
+      "Read(**/*.key.json)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Write(./keys/**)",
+      "Write(**/*.key.json)",
+      "Write(./.env)",
+      "Write(./.env.*)",
+      "Edit(./keys/**)",
+      "Edit(**/*.key.json)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Bash(git push:*main*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git commit:*--no-verify*)",
+      "Bash(git commit:*-n *)",
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf .:*)",
+      "Bash(rm -rf ~/:*)",
+      "Bash(pnpm publish:*)",
+      "Bash(npm publish:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh release:*)",
+      "Bash(pnpm sign:*)",
+      "Bash(pnpm sign:manifest:*)",
+      "Bash(pnpm sign:all-official:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/guard-protected-paths.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/guard-bash.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "biomejs.biome",
+    "editorconfig.editorconfig",
+    "ms-playwright.playwright",
+    "vitest.explorer",
+    "yzhang.markdown-all-in-one",
+    "redhat.vscode-yaml",
+    "github.vscode-github-actions",
+    "tamasfe.even-better-toml",
+    "pkief.material-icon-theme",
+    "anthropic.claude-code"
+  ],
+  "unwantedRecommendations": ["esbenp.prettier-vscode", "dbaeumer.vscode-eslint"]
+}
