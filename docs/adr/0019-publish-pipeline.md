@@ -2,7 +2,13 @@
 
 ## Status
 
-Accepted.
+Accepted (2026-04-26). Tooling shipped — `.github/workflows/publish-addon-sdk.yml`
+(§5 release flow), `scripts/verify-addon-sdk.ts` (§6 version-bump and
+runtime byte-equality guards), runbook in `docs/dev/release.md`, and the
+install section in `docs/dev/writing-an-addon.md`. Initial publish is
+pending operational prerequisites only: npm `@senn` scope, `NPM_TOKEN`
+secret on the repository, and the `private:true` flip + `version: 0.1.0`
+bump on `packages/addon-sdk/package.json`.
 
 ## Context
 

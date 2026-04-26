@@ -8,6 +8,12 @@ This directory holds ADRs for SENN. New ADRs follow the existing template:
 ## Status
 Proposed | Accepted | Implemented | Superseded by ADR-XXXX | Deprecated
 
+`Implemented` MAY be used in place of `Accepted` once the deliverable
+named in the ADR's §Decision is merged on `develop`. The Status line
+SHOULD cite the merge commit or shipping artefact (filesystem path,
+package, or workflow) so readers can verify the claim without git
+archaeology.
+
 ## Context
 <what problem are we solving and what constraints apply>
 
@@ -44,5 +50,5 @@ Proposed | Accepted | Implemented | Superseded by ADR-XXXX | Deprecated
 | 0017 | [Registry schema v2 — categorisation, deprecation, meta-registries](0017-registry-schema-v2.md) | Implemented (superseded by 0020 for v3 fields) |
 | 0018 | [Add-on SDK type distribution](0018-addon-sdk-types.md) | Accepted |
 | 0019 | [Public npm publish pipeline](0019-publish-pipeline.md) | Accepted (tooling shipped — workflow, guards, runbook in [`docs/dev/release.md`](../dev/release.md); initial publish pending operational prerequisites: npm `@senn` scope + `NPM_TOKEN` secret + version bump) |
-| 0020 | [Registry schema v3 — version histories, submissions, audits](0020-registry-schema-v3.md) | Accepted |
+| 0020 | [Registry schema v3 — version histories, submissions, audits](0020-registry-schema-v3.md) | Implemented |
 | 0021 | [Local-first conformance gate (no dependency on GitHub Actions)](0021-local-first-conformance.md) | Accepted |
