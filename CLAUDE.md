@@ -74,7 +74,12 @@ typecheck → lint → `validate:all-manifests` → `check:addon-forbidden` →
 `verify:addon-sdk` → `build:addon-sdk` (no diff) → `build:web-registry` (no diff)
 → Playwright web e2e (chromium/firefox/webkit) → Playwright gallery e2e.
 
-Run `/senn-conformance` to mirror this locally before opening a PR.
+Run `/senn-conformance` to mirror the **static** portion of this locally
+before opening a PR (typecheck through workspace tests; Playwright e2e is
+intentionally skipped — it runs in CI on Chromium / Firefox / WebKit and
+takes ~25 minutes per browser). For Playwright, run
+`pnpm --filter @senn/web e2e --project=chromium` (or the matching project)
+on demand.
 
 ## Branch policy
 

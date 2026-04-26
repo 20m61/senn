@@ -41,11 +41,17 @@ schema validation.
 
 ## Tooling
 
-`scripts/validate-addon-manifest.ts` runs in CI and locally:
+`scripts/validate-addon-manifest.ts` runs in CI and locally. Either invocation works:
 
 ```sh
+# canonical short form (package.json script alias)
+pnpm validate:addon addons/official/whiteboard/manifest.json
+
+# long form
 pnpm tsx scripts/validate-addon-manifest.ts addons/official/whiteboard/manifest.json
 ```
+
+To revalidate every shipped manifest at once: `pnpm validate:all-manifests`.
 
 ## Future extensions (non-normative)
 
