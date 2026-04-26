@@ -17,19 +17,16 @@ Do this safely:
    If on `main` or `develop`, refuse and ask the user to switch to a topic
    branch.
 
-2. Run a fast subset of the conformance gate (skip Playwright):
+2. Run the authoritative local conformance gate (Playwright is on-demand,
+   not in this command):
 
    ```bash
-   pnpm typecheck && pnpm lint && pnpm validate:all-manifests \
-     && pnpm check:addon-forbidden && pnpm verify:official \
-     && pnpm test:registry-schema \
-     && pnpm validate:registry addons/official/index.json \
-     && SENN_VERIFY_SDK_OFFLINE=1 pnpm verify:addon-sdk \
-     && pnpm test
+   pnpm conformance
    ```
 
-   If any step fails, stop and report which one. Do NOT bypass with
-   `--no-verify`.
+   If any step fails, stop and report which one (the script's summary
+   table makes this obvious). Do NOT bypass with `--no-verify` or
+   `SENN_SKIP_PREPUSH=1`.
 
 3. Inspect the diff vs `develop`:
 

@@ -38,6 +38,10 @@ Keep subjects short and write the body in English.
 - Reference related issues.
 - Keep PRs focused; split large changes.
 - Update relevant docs and ADRs when you change behavior or architecture.
+- Run `pnpm conformance` locally before pushing (the pre-push git hook
+  runs it automatically — `pnpm install` wires the hook up via the
+  `prepare` script). The hook's pass is the ship contract; GitHub
+  Actions is a convenience mirror, not the authority.
 - Ensure manifest validators, license checks, and tests pass.
 
 ## Code Style

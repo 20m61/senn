@@ -2,11 +2,46 @@
 
 ## Intent
 
-A single page listing every check that runs locally and in CI, what each
-check guards, and how to interpret a failure. AI coders MUST run each
-relevant block and paste the output into their PR description.
+A single page listing every check that defines the SENN contract, what
+each check guards, and how to interpret a failure. AI coders MUST run
+the relevant blocks and paste the output into their PR description.
 
-## Repo-level
+## Local-first: `pnpm conformance` is the authority
+
+The full gate is one command:
+
+```sh
+pnpm conformance
+```
+
+That runs `scripts/conformance.sh`, which sequences every static check
+(typecheck → lint → manifest validators → forbidden-API grep → official
+add-on signatures → registry schema → addon-sdk shape → drift checks →
+workspace tests) and prints a single PASS/FAIL summary at the end. A
+green run is the ship contract. **The repo does not depend on GitHub
+Actions to enforce its contract.**
+
+The pre-push git hook in `.githooks/pre-push` runs `pnpm conformance`
+automatically. `pnpm install` wires the hook up via the `prepare`
+script (`git config core.hooksPath .githooks`).
+
+Bypass (emergency only — surfaces in `git log`):
+
+```sh
+git push --no-verify           # one-time
+SENN_SKIP_PREPUSH=1 git push   # one-time, env form
+git config --unset core.hooksPath  # repo-wide opt-out (discouraged)
+```
+
+Browser e2e (Playwright) is **not** part of `pnpm conformance` — it
+takes ~25 minutes per browser. Run on demand:
+
+```sh
+pnpm --filter @senn/web e2e --project=chromium    # or firefox / webkit
+pnpm --filter @senn/addon-gallery exec playwright test --project=chromium
+```
+
+## Step-by-step (what `pnpm conformance` runs)
 
 ```sh
 pnpm install
@@ -85,17 +120,21 @@ When editing `docs/`:
 - `docs/roadmap.md` reflects the new state.
 - ADRs touched by the release are `Accepted`, not `Proposed`.
 
-## CI
+## CI (optional, not authoritative)
 
-CI runs in `.github/workflows/conformance.yml` on push and PR to
-`develop` and `main`. Two jobs:
+`.github/workflows/conformance.yml` mirrors the local gate as a
+convenience for forks that have GitHub Actions enabled. It is **not**
+the source of truth — the local `pnpm conformance` run is. If Actions
+is unavailable on a fork (billing lock, self-hosted runners exhausted,
+disabled at the org level), the project still ships: contributors run
+`pnpm conformance` locally and the pre-push hook gates merges.
 
-1. **static** — `pnpm install --frozen-lockfile`, `pnpm typecheck`,
-   `pnpm lint`, `pnpm validate:all-manifests`,
-   `pnpm check:addon-forbidden`, `pnpm verify:official`,
-   `pnpm validate:invite` + `pnpm validate:bundle` against committed
-   fixtures, `pnpm test` (vitest), and `pnpm --filter @senn/web build`.
-2. **e2e** — `pnpm --filter @senn/web e2e --project=<browser>` runs as a matrix across Chromium, Firefox, and WebKit so WebRTC compatibility regressions show up before merge. Browsers are cached per engine.
+The two CI jobs:
 
-Contributors should still run the same checks locally before opening
-a PR. PRs without conformance evidence will be sent back.
+1. **static** — same step sequence as `pnpm conformance`.
+2. **e2e** — `pnpm --filter @senn/web e2e --project=<browser>` matrix
+   across Chromium / Firefox / WebKit. Run locally on demand only when
+   touching code that crosses the WebRTC / DataChannel boundary; one
+   browser project is usually enough for inner-loop iteration.
+
+PRs without local conformance evidence will be sent back.

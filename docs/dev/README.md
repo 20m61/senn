@@ -55,7 +55,7 @@ operate against the same SDD guardrails as a human contributor:
 
   | Command              | Purpose                                                 |
   |----------------------|---------------------------------------------------------|
-  | `/senn-conformance`  | Mirror the CI `static` job locally.                     |
+  | `/senn-conformance`  | Run the authoritative local gate (`pnpm conformance`).  |
   | `/senn-validate`     | Run manifest + registry + addon-sdk shape validators.   |
   | `/senn-addon-new`    | Scaffold a new add-on via the `addon-builder` agent.    |
   | `/senn-adr-new`      | Draft a new ADR via the `adr-author` agent.             |
