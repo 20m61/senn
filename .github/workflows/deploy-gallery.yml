@@ -8,7 +8,11 @@ name: deploy-gallery
 
 on:
   push:
-    branches: [main]
+    # `main` is the long-term release branch. `develop` is included as a
+    # bootstrap trigger while `main` does not yet exist on this repo;
+    # remove `develop` from this list once `main` is established and the
+    # develop→main PR model is the only path to production.
+    branches: [main, develop]
   workflow_dispatch:
 
 permissions:
