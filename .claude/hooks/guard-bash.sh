@@ -5,7 +5,19 @@
 #   - direct commits/pushes to main
 #   - skipping commit hooks (--no-verify)
 #   - publishing packages
+#   - bash-side reads/writes/deletes on protected credential paths
 #   - rm -rf on broad targets
+#
+# Detection is segment-aware: the command is split on shell separators
+# (`&&`, `||`, `;`, newline) and each *segment* is evaluated against its
+# leading command. This avoids false positives where the *prose* in a
+# `git commit -m "…"` body or PR body contains words like "git push",
+# "main", "--no-verify", "rm -rf", or "pnpm publish" while documenting
+# these very rules.
+#
+# The harness-level deny rules in .claude/settings.json and the
+# .githooks/pre-push hook are the other layers of defense — this is one
+# layer of three.
 #
 # Allows everything else. Permissions.allow / .ask still applies.
 
@@ -35,53 +47,134 @@ deny() {
   exit 0
 }
 
-# Block direct push to main (any remote). Word-anchored on both sides so
-# branch names that merely start with "main" (mainline, main-fix) don't
-# trip; refspecs (HEAD:main, main:main, :main) and -u/-f flag forms do.
-if [[ "$cmd" =~ git[[:space:]]+push([[:space:]]|$) ]] \
-   && [[ "$cmd" =~ ([[:space:]:])main([[:space:]:]|$) ]]; then
-  deny "SENN guardrail: pushes to main are forbidden — releases only via PR from develop (CLAUDE.md, CONTRIBUTING.md)."
-fi
+# ────────────────────────────────────────────────────────────────────
+# Segment extraction.
+#
+# Split $cmd on shell separators (&&, ||, ;, newline) into command
+# segments. Each segment is independently checked against rules. This
+# matters because:
+#
+#   git commit -F /tmp/msg  (where /tmp/msg contains "git push origin main")
+#
+# is NOT a push to main. The previous all-string regex would false-
+# positive because "git push" and "main" both appear in $cmd.
+#
+# Quoting is handled coarsely: we strip single- and double-quoted
+# substrings before splitting, so prose inside `git commit -m "…"`
+# does not appear in any segment. This is intentional — quoted prose
+# never executes. Heredoc bodies also disappear because they live
+# between markers that contain no separators outside the body, and
+# the body itself is then erased by the quote stripper if the user
+# uses `<<'EOF'` (single-quoted heredoc) — common for commit messages.
+#
+# Edge cases:
+#   - Shell-substitution like `$(cmd …)` is left intact: substitutions
+#     can themselves contain dangerous calls. We treat the whole `$(…)`
+#     as part of its surrounding segment, which is the safe choice.
+#   - A heredoc body with separators inside it (rare in practice for
+#     SENN commit messages) is left as part of the segment containing
+#     the heredoc opener. Our rules anchor on the segment's leading
+#     command, so a heredoc body's content does not satisfy the
+#     "leading command is X" check.
+# ────────────────────────────────────────────────────────────────────
 
-# Block hard force-push. --force-with-lease is the recommended safer
-# alternative (refuses to overwrite remote work) and is intentionally
-# allowed here; a separate ask rule in settings.json gates it.
-if [[ "$cmd" =~ git[[:space:]]+push.*(--force([[:space:]]|$)|-f([[:space:]]|$)) ]]; then
-  deny "SENN guardrail: --force is blocked. Use --force-with-lease (rebases/feature branches) or ask the user to run --force manually."
-fi
+# Strip single- and double-quoted regions (greedy minimal-pair matching
+# in bash via parameter expansion + a small loop). Preserves length
+# semantics enough that segment splitting works correctly.
+strip_quotes() {
+  local s=$1 out=""
+  while [[ -n "$s" ]]; do
+    case "$s" in
+      \'*)
+        # Strip up to the next single quote.
+        s=${s#\'}
+        s=${s#*\'}
+        ;;
+      \"*)
+        # Strip up to the next double quote, accounting for \"
+        # escapes.
+        s=${s#\"}
+        local rest=""
+        while [[ -n "$s" ]]; do
+          case "$s" in
+            \\\"*) s=${s#\\\"} ;;
+            \"*)   s=${s#\"}; break ;;
+            *)     rest+=${s:0:1}; s=${s:1} ;;
+          esac
+        done
+        ;;
+      *)
+        out+=${s:0:1}
+        s=${s:1}
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
 
-# Block --no-verify on commits/merges (skips conformance pre-commit).
-if [[ "$cmd" =~ (git[[:space:]]+(commit|merge|rebase|cherry-pick).*--no-verify) ]]; then
-  deny "SENN guardrail: --no-verify skips conformance hooks. Fix the underlying failure instead of bypassing it."
-fi
+stripped=$(strip_quotes "$cmd")
 
-# Block package publishing — only the publish-addon-sdk.yml workflow is
-# authorized. Word-bounded so substrings like "publish-foo" don't match.
-if [[ "$cmd" =~ (^|[[:space:]])(pnpm|npm|yarn)[[:space:]]+publish([[:space:]]|$) ]]; then
-  deny "SENN guardrail: package publishing is workflow-only (.github/workflows/publish-addon-sdk.yml). Do not publish from the local machine."
-fi
+# Replace separators with newlines for iteration. We keep this on the
+# stripped form so quoted prose is already gone.
+normalized=$(printf '%s\n' "$stripped" | tr ';' '\n')
+normalized=${normalized//&&/$'\n'}
+normalized=${normalized//||/$'\n'}
 
-# Block bash-side reads/writes/deletes on protected credential paths.
-# Hook guard-protected-paths.sh covers Write|Edit; this catches the bash
-# vector (cat keys/x.key.json, rm keys/x, mv keys/ /tmp, …) which would
-# otherwise leak content into the transcript or destroy the trust root.
-# Pattern mirrors guard-protected-paths.sh:39.
-sensitive_cmd_re='(^|[[:space:]/])(cat|less|more|head|tail|bat|rm|mv|cp|tee|tar|zip|gzip|gpg|openssl|base64|xxd|od|hexdump|strings|file|stat)([[:space:]]|$)'
-sensitive_path_re='(^|[[:space:]=/])(keys/|[^[:space:]]*\.key\.json|[^[:space:]]*\.pem|[^[:space:]]*id_rsa|[^[:space:]]*id_ed25519|[^[:space:]]*credentials\.json|[^[:space:]]*secrets\.json)'
-if [[ "$cmd" =~ $sensitive_cmd_re ]] && [[ "$cmd" =~ $sensitive_path_re ]]; then
-  # Allow .env.example explicitly (the only .env* contributors edit).
-  if [[ ! "$cmd" =~ \.env\.example ]]; then
-    deny "SENN guardrail: bash command targets a protected credential/key path (keys/, *.key.json, *.pem, id_rsa*, *credentials.json, *secrets.json). ADR-0009 forbids reading/moving/deleting signing keys via Claude. Ask the user to do it manually."
+# Iterate segments. For each, derive its leading command (first word,
+# trimmed) and apply rules.
+while IFS= read -r segment; do
+  # Trim leading whitespace.
+  while [[ "$segment" =~ ^[[:space:]] ]]; do segment=${segment# }; segment=${segment#$'\t'}; done
+  [[ -z "$segment" ]] && continue
+
+  # ─── Rule: direct push to main (any remote) ──────────────────────
+  # Trigger when this segment is a `git push` invocation AND its arg
+  # list contains `main` as a refspec/branch token.
+  if [[ "$segment" =~ ^git[[:space:]]+push([[:space:]]|$) ]] \
+     && [[ "$segment" =~ ([[:space:]:])main([[:space:]:]|$) ]]; then
+    deny "SENN guardrail: pushes to main are forbidden — releases only via PR from develop (CLAUDE.md, CONTRIBUTING.md)."
   fi
-fi
 
-# Block reckless rm. Catches both -rf / -fr (any flag order) and the
-# long forms --recursive / --force.
-broad_target_re='([[:space:]]|=)(/|/\*|~|~/|\$HOME|\.|\./)([[:space:]]|$|;|\|)'
-if [[ "$cmd" =~ (^|[[:space:]])rm([[:space:]]+(-[a-zA-Z]+|--(recursive|force|no-preserve-root)))+ ]] \
-   && [[ "$cmd" =~ -[a-zA-Z]*r[a-zA-Z]* || "$cmd" =~ --recursive ]] \
-   && [[ "$cmd" =~ $broad_target_re ]]; then
-  deny "SENN guardrail: recursive 'rm' on a broad target is blocked. Be specific or ask the user to run it manually."
-fi
+  # ─── Rule: hard force-push (--force / -f). --force-with-lease is OK ─
+  if [[ "$segment" =~ ^git[[:space:]]+push([[:space:]]|$) ]] \
+     && [[ "$segment" =~ (--force([[:space:]]|$)|-f([[:space:]]|$)) ]]; then
+    deny "SENN guardrail: --force is blocked. Use --force-with-lease (rebases/feature branches) or ask the user to run --force manually."
+  fi
+
+  # ─── Rule: --no-verify on git commit/merge/rebase/cherry-pick ────
+  # Anchored on the leading command so prose in a commit message body
+  # mentioning "--no-verify" does not trip the rule.
+  if [[ "$segment" =~ ^git[[:space:]]+(commit|merge|rebase|cherry-pick)([[:space:]]|$) ]] \
+     && [[ "$segment" =~ ([[:space:]]|=)--no-verify([[:space:]]|=|$) ]]; then
+    deny "SENN guardrail: --no-verify skips conformance hooks. Fix the underlying failure instead of bypassing it."
+  fi
+
+  # ─── Rule: package publishing (pnpm/npm/yarn publish) ────────────
+  if [[ "$segment" =~ ^(pnpm|npm|yarn)[[:space:]]+publish([[:space:]]|$) ]]; then
+    deny "SENN guardrail: package publishing is workflow-only (.github/workflows/publish-addon-sdk.yml). Do not publish from the local machine."
+  fi
+
+  # ─── Rule: bash-side touch on protected credential paths ─────────
+  # Match if the leading command is a sensitive cat/cp/mv/etc. AND the
+  # segment names a protected path. .env.example is allowed.
+  sensitive_cmd_re='^(cat|less|more|head|tail|bat|rm|mv|cp|tee|tar|zip|gzip|gpg|openssl|base64|xxd|od|hexdump|strings|file|stat)[[:space:]]'
+  sensitive_path_re='(^|[[:space:]=/])(keys/|[^[:space:]]*\.key\.json|[^[:space:]]*\.pem|[^[:space:]]*id_rsa|[^[:space:]]*id_ed25519|[^[:space:]]*credentials\.json|[^[:space:]]*secrets\.json)'
+  if [[ "$segment" =~ $sensitive_cmd_re ]] && [[ "$segment" =~ $sensitive_path_re ]]; then
+    if [[ ! "$segment" =~ \.env\.example ]]; then
+      deny "SENN guardrail: bash command targets a protected credential/key path (keys/, *.key.json, *.pem, id_rsa*, *credentials.json, *secrets.json). ADR-0009 forbids reading/moving/deleting signing keys via Claude. Ask the user to do it manually."
+    fi
+  fi
+
+  # ─── Rule: reckless rm on broad targets ──────────────────────────
+  # Leading command must be `rm`. Recursive flag must be present.
+  # Target must be one of /, ~, $HOME, ., or their slashed/glob
+  # variants. Specific paths (rm -rf packages/foo/dist) are allowed.
+  broad_target_re='([[:space:]]|=)(/|/\*|~|~/|\$HOME|\.|\./)([[:space:]]|$|;|\|)'
+  if [[ "$segment" =~ ^rm([[:space:]]+(-[a-zA-Z]+|--(recursive|force|no-preserve-root)))+ ]] \
+     && { [[ "$segment" =~ -[a-zA-Z]*r[a-zA-Z]* ]] || [[ "$segment" =~ --recursive ]]; } \
+     && [[ "$segment" =~ $broad_target_re ]]; then
+    deny "SENN guardrail: recursive 'rm' on a broad target is blocked. Be specific or ask the user to run it manually."
+  fi
+done <<< "$normalized"
 
 exit 0
