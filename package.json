@@ -40,6 +40,7 @@
     "build:web-registry": "tsx scripts/build-web-registry.ts",
     "stage:gallery-static": "tsx scripts/stage-gallery-static.ts",
     "verify:http-poll-endpoint": "tsx scripts/verify-http-poll-endpoint.ts",
+    "verify:http-poll-self-test": "tsx scripts/verify-http-poll-self-test.ts",
     "release:addon-sdk": "bash scripts/publish-addon-sdk.sh"
   },
   "devDependencies": {

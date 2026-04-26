@@ -124,13 +124,16 @@ indicative, not committed:
   toolchain is in place. Pending: npm `@senn` scope acquisition,
   npm 2FA on the maintainer account, `private:false` flip, and
   `version: 0.1.0` bump on `packages/addon-sdk/package.json`.
-- ⬜ **Node-side PeerSession tests** — `docs/peer-session-spec.md`
-  defers Vitest to a future Node-side mock harness; today coverage
-  is browser-side only via Playwright.
-- ⬜ **`pnpm verify:http-poll-endpoint` self-test** —
-  `docs/signaling-nostr-spec.md` notes the black-box probe is
-  future work; the reference HTTP poll server under
-  `examples/signaling-http-poll-server` is the natural target.
+- ✅ ~~**Node-side PeerSession tests**~~ — shipped in
+  `packages/core/test/peer-session.test.ts`; covers every MUST in
+  `docs/peer-session-spec.md` against in-process fakes. Playwright
+  remains the real-stack harness on demand.
+- ✅ ~~**`pnpm verify:http-poll-endpoint` self-test**~~ — shipped as
+  `pnpm verify:http-poll-self-test` (in `pnpm conformance`); spawns
+  the Node reference server in-process and runs the same probe
+  operators run against deployed endpoints. A Nostr-side equivalent
+  is now the remaining smoke-script gap (tracked in
+  `docs/signaling-nostr-spec.md` Conformance section).
 - 📌 **N>2 multi-party media** (ADR-0015 §"Out of scope") — explicit
   deferral; revisit when a concrete use case lands.
 - 📌 **Backpressure / flow control on binary transfer** (ADR-0011 §6)

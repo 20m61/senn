@@ -151,6 +151,8 @@ Content-Type: application/json
 
 ```sh
 pnpm --filter @senn/signaling-http-poll test
+pnpm verify:http-poll-self-test       # in-process end-to-end probe
+pnpm verify:http-poll-endpoint <url>  # operator-side probe of any deployed endpoint
 ```
 
 The vitest suite drives two adapter instances against an in-memory
@@ -162,6 +164,20 @@ mock endpoint and exercises:
 - `close()` aborts the polling loop and rejects subsequent calls.
 - Server 4xx / 5xx responses surface as `Error` from `publish`.
 - The adapter does not embed any default endpoint URL.
+
+The **in-process self-test** (`pnpm verify:http-poll-self-test`,
+included in `pnpm conformance`) spawns the Node reference server
+(`examples/signaling-http-poll-server/node/server.mjs`) on an
+ephemeral port and runs the same `runChecks` suite that the
+operator-facing `pnpm verify:http-poll-endpoint` ships. It catches
+three classes of regression at once: probe-script logic drift, Node
+reference-server drift, and `@senn/signaling-http-poll` adapter
+contract drift.
+
+The **operator-side probe** (`pnpm verify:http-poll-endpoint <url>`)
+is the same harness pointed at any third-party reference deployment
+(PHP, Python, Go, Workers, …) to confirm spec conformance after
+deployment.
 
 ## Cross-references
 

@@ -54,13 +54,18 @@ async function waitFor<T>(probe: () => T | undefined, timeoutMs = 5_000): Promis
   }
 }
 
-interface CheckResult {
+export interface CheckResult {
   readonly name: string;
   readonly ok: boolean;
   readonly detail?: string;
 }
 
-async function runChecks(args: Args): Promise<CheckResult[]> {
+export interface RunChecksArgs {
+  readonly endpoint: string;
+  readonly intervalMs: number;
+}
+
+export async function runChecks(args: RunChecksArgs): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
   const room = newRoomId();
   const alice = newPeerId();
@@ -188,7 +193,12 @@ async function main(): Promise<void> {
   console.log(`verify-http-poll-endpoint: ${results.length} ok`);
 }
 
-main().catch((err) => {
-  console.error(`verify-http-poll-endpoint: ${(err as Error).message}`);
-  process.exit(1);
-});
+// Run main() only when this file is invoked directly (as a script). When
+// it is imported as a module (e.g., by `verify-http-poll-self-test.ts`),
+// only the exports — `runChecks` and the result types — are needed.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    console.error(`verify-http-poll-endpoint: ${(err as Error).message}`);
+    process.exit(1);
+  });
+}

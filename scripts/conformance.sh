@@ -111,6 +111,7 @@ run "lint (biome)"            pnpm lint
 run "validate:all-manifests"  pnpm validate:all-manifests
 run "check:addon-forbidden"   pnpm check:addon-forbidden
 run "verify:official"         pnpm verify:official
+run "verify:http-poll-self-test"  pnpm verify:http-poll-self-test
 run "test:registry-schema"    pnpm test:registry-schema
 run "validate:registry"       pnpm validate:registry addons/official/index.json
 SENN_VERIFY_SDK_OFFLINE=1 \

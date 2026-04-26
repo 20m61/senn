@@ -20,6 +20,7 @@
       "Bash(pnpm verify:official:*)",
       "Bash(pnpm verify:addon-sdk:*)",
       "Bash(pnpm verify:http-poll-endpoint:*)",
+      "Bash(pnpm verify:http-poll-self-test:*)",
       "Bash(pnpm test:registry-schema:*)",
       "Bash(pnpm build:addon-sdk:*)",
       "Bash(pnpm build:web-registry:*)",

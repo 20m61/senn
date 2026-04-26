@@ -112,8 +112,12 @@ subscribe, dedup across relays, reconnect after socket close.
 
 The adapter does not run against a real Nostr relay in CI to keep
 the test surface deterministic; operators verifying their own relay
-setup should pair this adapter with a smoke script (analogous to
-`pnpm verify:http-poll-endpoint`) — that script is future work.
+setup should pair this adapter with a smoke script analogous to
+`pnpm verify:http-poll-endpoint` (whose in-process self-test —
+`pnpm verify:http-poll-self-test` — runs in `pnpm conformance` and
+serves as the working template). A Nostr-side equivalent is left as
+follow-up work; the existing in-process mock relay covers the
+adapter's wire-frame surface in the meantime.
 
 ## Cross-references
 

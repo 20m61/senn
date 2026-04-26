@@ -62,6 +62,7 @@ keys/                 *** signing keys — read/write FORBIDDEN by Claude ***
 | Forbidden-API grep on add-ons  | `pnpm check:addon-forbidden`                   |
 | Verify official-addon sigs     | `pnpm verify:official`                         |
 | Verify @senn/addon-sdk shape   | `SENN_VERIFY_SDK_OFFLINE=1 pnpm verify:addon-sdk` |
+| HTTP-poll endpoint self-test   | `pnpm verify:http-poll-self-test`              |
 | Validate registry index        | `pnpm validate:registry addons/official/index.json` |
 | Test registry schema           | `pnpm test:registry-schema`                    |
 | Build addon-sdk runtime        | `pnpm build:addon-sdk`                         |
@@ -73,7 +74,8 @@ keys/                 *** signing keys — read/write FORBIDDEN by Claude ***
 
 The contract is **`pnpm conformance`** (script: `scripts/conformance.sh`).
 That single command runs typecheck → lint → `validate:all-manifests` →
-`check:addon-forbidden` → `verify:official` → `test:registry-schema` →
+`check:addon-forbidden` → `verify:official` → `verify:http-poll-self-test`
+(in-process Tier-1 endpoint probe) → `test:registry-schema` →
 `validate:registry` → `verify:addon-sdk` (offline) → `build:addon-sdk`
 (drift check) → `build:web-registry` (drift check) → workspace tests.
 It is the source of truth for "is this branch safe to open as a PR?"
