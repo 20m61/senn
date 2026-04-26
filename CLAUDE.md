@@ -110,8 +110,12 @@ Use the `sdd-expert` agent before writing or merging changes to
 
 - **Never** modify, read into context, or commit:
   - `keys/**`, `**/*.key.json` (ADR-0009: signing keys MUST NOT be committed).
-  - `.env`, `.env.*` (except `.env.example`), `credentials.json`, `*.pem`,
-    `*.key`, `id_rsa`, `id_ed25519`, etc.
+  - `.env`, `.env.*` (except `.env.example` — that one is fine to read/edit),
+    `credentials.json`, `*.pem`, `*.key`, `id_rsa`, `id_ed25519`, etc.
+- The guardrail hooks (`.claude/hooks/guard-*.sh`) require `jq` on `PATH`
+  (`apt install jq` / `brew install jq`). If `jq` is missing, the hooks
+  fail open and the `permissions.deny` rules in `.claude/settings.json`
+  remain in force.
 - **Do not weaken** privacy or security claims to make implementation easier
   (see `docs/privacy.md`, `docs/security-model.md`).
 - **No new dependencies** without the license-policy check

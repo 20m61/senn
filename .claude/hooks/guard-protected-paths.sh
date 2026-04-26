@@ -10,6 +10,12 @@
 
 set -euo pipefail
 
+# Fail open if jq is unavailable; the deny rules in
+# .claude/settings.json still apply at the harness level.
+if ! command -v jq >/dev/null 2>&1; then
+  exit 0
+fi
+
 payload=$(cat)
 
 # Pull the file path from either tool input shape (Write.file_path / Edit.file_path).
