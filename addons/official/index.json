@@ -14,7 +14,17 @@
       "path": "apps/web/public/addons/echo",
       "capabilities": ["echo-v1"],
       "categories": ["developer-tools"],
-      "tags": ["reference", "bridge-demo"]
+      "tags": ["reference", "bridge-demo"],
+      "audit": {
+        "auditor": "SENN Project (self-attestation)",
+        "auditedAt": "2026-04-26T00:00:00Z",
+        "auditedVersion": "0.1.0",
+        "findings": {
+          "summary": "Reviewed against ADR-0006 (sandbox/CSP), ADR-0008 (manifest signing), and ADR-0011 (forbidden APIs). Reference echo bridge demo, no host-side state.",
+          "severityCounts": { "critical": 0, "high": 0, "medium": 0, "low": 0, "nit": 0 }
+        },
+        "url": "https://github.com/20m61/senn/blob/main/docs/adr/0020-registry-schema-v3.md"
+      }
     },
     {
       "id": "dev.senn.whiteboard",
@@ -44,7 +54,17 @@
       "path": "apps/web/public/addons/avatar-presence",
       "capabilities": ["avatar-presence-v1"],
       "categories": ["presence"],
-      "tags": ["reactions", "speaking"]
+      "tags": ["reactions", "speaking"],
+      "audit": {
+        "auditor": "SENN Project (self-attestation)",
+        "auditedAt": "2026-04-26T00:00:00Z",
+        "auditedVersion": "0.1.0",
+        "findings": {
+          "summary": "Reviewed against ADR-0006 (sandbox/CSP), ADR-0008 (manifest signing), and ADR-0011 (forbidden APIs). Confirmed no media tracks are requested — presence is state-only.",
+          "severityCounts": { "critical": 0, "high": 0, "medium": 0, "low": 0, "nit": 0 }
+        },
+        "url": "https://github.com/20m61/senn/blob/main/docs/adr/0020-registry-schema-v3.md"
+      }
     },
     {
       "id": "dev.senn.local-vault",
@@ -54,7 +74,17 @@
       "path": "apps/web/public/addons/local-vault",
       "capabilities": ["local-vault-v1"],
       "categories": ["files"],
-      "tags": ["transfer", "local-first"]
+      "tags": ["transfer", "local-first"],
+      "audit": {
+        "auditor": "SENN Project (self-attestation)",
+        "auditedAt": "2026-04-26T00:00:00Z",
+        "auditedVersion": "0.1.0",
+        "findings": {
+          "summary": "Reviewed against ADR-0006 (sandbox/CSP), ADR-0008 (manifest signing), ADR-0011 (forbidden APIs), and ADR-0012 (chunked binary peer transfer). Files stay local until the user opts to send.",
+          "severityCounts": { "critical": 0, "high": 0, "medium": 0, "low": 0, "nit": 0 }
+        },
+        "url": "https://github.com/20m61/senn/blob/main/docs/adr/0020-registry-schema-v3.md"
+      }
     },
     {
       "id": "dev.senn.voice-meter",
@@ -64,7 +94,17 @@
       "path": "apps/web/public/addons/voice-meter",
       "capabilities": ["voice-meter-v1"],
       "categories": ["presence"],
-      "tags": ["audio-level"]
+      "tags": ["audio-level"],
+      "audit": {
+        "auditor": "SENN Project (self-attestation)",
+        "auditedAt": "2026-04-26T00:00:00Z",
+        "auditedVersion": "0.1.0",
+        "findings": {
+          "summary": "Reviewed against ADR-0006 (sandbox/CSP), ADR-0008 (manifest signing), ADR-0011 (forbidden APIs), and ADR-0015 (media tracks). Add-on only consumes audio.level; raw audio stays host-side.",
+          "severityCounts": { "critical": 0, "high": 0, "medium": 0, "low": 0, "nit": 0 }
+        },
+        "url": "https://github.com/20m61/senn/blob/main/docs/adr/0020-registry-schema-v3.md"
+      }
     },
     {
       "id": "dev.senn.voice-call",
@@ -74,7 +114,17 @@
       "path": "apps/web/public/addons/voice-call",
       "capabilities": ["voice-call-v1"],
       "categories": ["communication"],
-      "tags": ["audio", "media-bridge"]
+      "tags": ["audio", "media-bridge"],
+      "audit": {
+        "auditor": "SENN Project (self-attestation)",
+        "auditedAt": "2026-04-26T00:00:00Z",
+        "auditedVersion": "0.1.0",
+        "findings": {
+          "summary": "Reviewed against ADR-0006 (sandbox/CSP), ADR-0008 (manifest signing), ADR-0011 (forbidden APIs), and ADR-0015 (media tracks). Add-on issues media.* bridge calls only; host owns the audio track end-to-end.",
+          "severityCounts": { "critical": 0, "high": 0, "medium": 0, "low": 0, "nit": 0 }
+        },
+        "url": "https://github.com/20m61/senn/blob/main/docs/adr/0020-registry-schema-v3.md"
+      }
     },
     {
       "id": "dev.senn.minimal",
@@ -84,7 +134,17 @@
       "path": "examples/minimal-addon",
       "capabilities": ["minimal-v1"],
       "categories": ["developer-tools"],
-      "tags": ["template"]
+      "tags": ["template"],
+      "audit": {
+        "auditor": "SENN Project (self-attestation)",
+        "auditedAt": "2026-04-26T00:00:00Z",
+        "auditedVersion": "0.0.1",
+        "findings": {
+          "summary": "Reviewed against ADR-0006 (sandbox/CSP), ADR-0008 (manifest signing), and ADR-0011 (forbidden APIs). Minimal template; no bridge calls beyond runtime handshake.",
+          "severityCounts": { "critical": 0, "high": 0, "medium": 0, "low": 0, "nit": 0 }
+        },
+        "url": "https://github.com/20m61/senn/blob/main/docs/adr/0020-registry-schema-v3.md"
+      }
     }
   ]
 }

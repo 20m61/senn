@@ -249,8 +249,10 @@ test.describe("Add-on gallery smoke (ADR-0016)", () => {
     await expect(badge).toBeVisible({ timeout: SHORT });
     await expect(badge).toHaveText(/audited v0\.1\.0/);
 
-    // Echo has no audit, so no badge should render for it.
-    await expect(page.locator('[data-testid="addon-audit-dev.senn.echo"]')).toHaveCount(0);
+    // The minimal template's audit attests against version 0.0.1 — proves
+    // the renderer interpolates auditedVersion correctly per addon.
+    const minimalBadge = page.locator('[data-testid="addon-audit-dev.senn.minimal"]');
+    await expect(minimalBadge).toHaveText(/audited v0\.0\.1/);
 
     await ctx.close();
   });
@@ -309,6 +311,96 @@ test.describe("Add-on gallery smoke (ADR-0016)", () => {
     // The endorsementUrl link is rendered as a "(report)" anchor.
     const reportLink = endorseRow.getByRole("link", { name: "(report)" });
     await expect(reportLink).toHaveAttribute("href", "https://example.invalid/endorse");
+
+    await ctx.close();
+  });
+
+  test("renders submissions index in its own section (ADR-0020 §2)", async ({ browser }) => {
+    const SUB_URL = "http://127.0.0.1:5173/registry/official/submissions.json";
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+
+    await page.route(SUB_URL, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          v: 1,
+          kind: "senn-publisher-submissions",
+          submissions: [
+            {
+              id: "sub-001",
+              addonId: "dev.example.proposed",
+              version: "0.1.0",
+              manifestUrl: "https://example.invalid/proposed/manifest.json",
+              signatureUrl: "https://example.invalid/proposed/manifest.sig.json",
+              publicKey: "RefyZUlMPbQgj8cdXqFOIofvBeuXmKZcBUpJ9mayybQ",
+              submittedAt: "2026-04-26T00:00:00Z",
+              contact: "submitter@example.invalid",
+              status: "needs-changes",
+              statusUpdatedAt: "2026-04-26T01:00:00Z",
+              statusReason: "Manifest is missing the description field.",
+              notes: "Will resubmit shortly.",
+            },
+            {
+              id: "sub-002",
+              addonId: "dev.example.accepted",
+              version: "1.0.0",
+              manifestUrl: "https://example.invalid/accepted/manifest.json",
+              signatureUrl: "https://example.invalid/accepted/manifest.sig.json",
+              publicKey: "RefyZUlMPbQgj8cdXqFOIofvBeuXmKZcBUpJ9mayybQ",
+              submittedAt: "2026-04-25T00:00:00Z",
+              contact: "team@example.invalid",
+              status: "accepted",
+              statusUpdatedAt: "2026-04-26T00:00:00Z",
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.addInitScript(
+      ({ subUrl, hostOrigin }) => {
+        try {
+          localStorage.setItem("senn.gallery.registries", JSON.stringify([{ url: subUrl }]));
+          localStorage.setItem("senn.gallery.host-origin", hostOrigin);
+        } catch {
+          /* localStorage may not be available; addInitScript will retry per nav */
+        }
+      },
+      { subUrl: SUB_URL, hostOrigin: "http://127.0.0.1:5173" },
+    );
+    await page.goto("/");
+
+    await expect(page.locator("#config-status")).toContainText("loaded", { timeout: SHORT });
+
+    // Registry-list row for the submissions URL is annotated as such.
+    const subRow = page.locator(
+      `[data-testid="registry-submissions-${encodeURIComponent(SUB_URL)}"]`,
+    );
+    await expect(subRow).toContainText("submissions index · 2 submissions", { timeout: SHORT });
+
+    // Submissions section becomes visible with both entries.
+    const card1 = page.locator('[data-testid="submission-card-sub-001"]');
+    const card2 = page.locator('[data-testid="submission-card-sub-002"]');
+    await expect(card1).toBeVisible({ timeout: SHORT });
+    await expect(card2).toBeVisible();
+    await expect(card1).toContainText("dev.example.proposed v0.1.0");
+    await expect(card1).toContainText("reason: Manifest is missing the description field.");
+    await expect(card1.locator('[data-testid="submission-status-sub-001"]')).toHaveText(
+      "needs-changes",
+    );
+    await expect(card2.locator('[data-testid="submission-status-sub-002"]')).toHaveText("accepted");
+
+    // Manifest + signature anchors point at the absolute URLs from the doc.
+    await expect(page.locator('[data-testid="submission-manifest-sub-001"]')).toHaveAttribute(
+      "href",
+      "https://example.invalid/proposed/manifest.json",
+    );
+    await expect(page.locator('[data-testid="submission-signature-sub-002"]')).toHaveAttribute(
+      "href",
+      "https://example.invalid/accepted/manifest.sig.json",
+    );
 
     await ctx.close();
   });

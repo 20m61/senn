@@ -36,6 +36,7 @@
     "sign:all-official": "tsx scripts/sign-all-official.ts",
     "build:addon-sdk": "tsx scripts/build-addon-sdk.ts",
     "build:web-registry": "tsx scripts/build-web-registry.ts",
+    "stage:gallery-pages": "tsx scripts/stage-gallery-pages.ts",
     "verify:http-poll-endpoint": "tsx scripts/verify-http-poll-endpoint.ts"
   },
   "devDependencies": {

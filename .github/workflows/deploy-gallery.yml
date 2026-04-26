@@ -1,0 +1,73 @@
+name: deploy-gallery
+
+# Builds the addon-gallery (apps/addon-gallery) and publishes it to GitHub
+# Pages at https://20m61.github.io/senn/. The build mirrors the official
+# publisher index + signed addon manifests into the gallery's dist/ so the
+# Pages deploy is self-contained — the user does not need to type a URL on
+# first visit.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one concurrent deployment to Pages.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Refresh web-registry mirror (drives staging)
+        run: pnpm build:web-registry
+
+      - name: Build addon-gallery (with Pages base)
+        env:
+          GALLERY_BASE: /senn/
+        run: pnpm --filter @senn/addon-gallery build
+
+      - name: Stage registry + addon manifests into gallery dist
+        run: pnpm stage:gallery-pages
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/addon-gallery/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

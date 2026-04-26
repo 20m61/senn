@@ -143,8 +143,48 @@ interface MetaSummary {
   readonly endorsedCount: number;
 }
 
+// ADR-0020 §2 — PublisherSubmissionsV1.
+type SubmissionStatus = "pending" | "needs-changes" | "accepted" | "rejected" | "withdrawn";
+
+interface SubmissionV1 {
+  readonly id: string;
+  readonly addonId: string;
+  readonly version: string;
+  readonly manifestUrl: string;
+  readonly signatureUrl: string;
+  readonly publicKey: string;
+  readonly submittedAt: string;
+  readonly contact: string;
+  readonly status: SubmissionStatus;
+  readonly statusUpdatedAt: string;
+  readonly statusReason?: string;
+  readonly notes?: string;
+}
+
+interface PublisherSubmissionsV1 {
+  readonly v: 1;
+  readonly kind: "senn-publisher-submissions";
+  readonly submissions: readonly SubmissionV1[];
+}
+
+interface SubmissionsSummary {
+  readonly url: string;
+  readonly count: number;
+}
+
 const LS_REGISTRIES = "senn.gallery.registries";
 const LS_HOST_ORIGIN = "senn.gallery.host-origin";
+
+function basePath(): string {
+  // Vite injects BASE_URL at build time; on Pages the deploy workflow sets
+  // it to "/<repo>/", in dev it stays "/". Always shaped as "/<...>/" or "/".
+  // The narrow cast avoids pulling vite/client types into the gallery's
+  // tsconfig — the gallery is a single-file vanilla TS app.
+  const meta = import.meta as { env?: { BASE_URL?: string } };
+  const b = (meta.env?.BASE_URL ?? "/").trim();
+  if (b.length === 0) return "/";
+  return b.endsWith("/") ? b : `${b}/`;
+}
 
 function defaultRegistryUrl(): string {
   // In dev the SENN web app commonly runs at 127.0.0.1:5173. In production
@@ -152,9 +192,10 @@ function defaultRegistryUrl(): string {
   // fall back to a well-known absolute URL the user can edit.
   if (typeof location !== "undefined" && location.origin) {
     // If the gallery is served from the same origin as the host, the
-    // registry mirror is at /registry/official/index.json (matches
-    // apps/web/public/registry/official/index.json).
-    return `${location.origin.replace(/\/+$/, "")}/registry/official/index.json`;
+    // registry mirror is at <base>registry/official/index.json (matches
+    // apps/web/public/registry/official/index.json, optionally prefixed
+    // by Vite's BASE_URL when deployed to a subpath like GitHub Pages).
+    return `${location.origin.replace(/\/+$/, "")}${basePath()}registry/official/index.json`;
   }
   return "http://127.0.0.1:5173/registry/official/index.json";
 }
@@ -214,10 +255,18 @@ function basenameOfPath(path: string): string {
 
 function manifestUrlFor(registryUrl: string, addonPath: string): string {
   // The registry's `path` is repo-relative ("apps/web/public/addons/echo").
-  // We use the basename and resolve against the registry origin's /addons/.
-  // This matches the served convention used by apps/web (public folder).
+  // We use the basename and resolve relative to the registry URL's parent
+  // directory, so a registry served at /<prefix>/registry/<publisher>/index.json
+  // (the apps/web/public layout, optionally prefixed for subpath deploys
+  // like GitHub Pages) finds its manifests at /<prefix>/addons/<slug>/...
+  // When the registry URL doesn't match the convention we fall back to
+  // <origin>/addons/<slug>/... which preserves the v1 behaviour.
   const u = new URL(registryUrl);
   const base = basenameOfPath(addonPath);
+  const m = u.pathname.match(/^(.*)\/registry\/[^/]+\/[^/]+$/);
+  if (m) {
+    return new URL(`${m[1]}/addons/${base}/manifest.json`, u.origin).toString();
+  }
   return new URL(`/addons/${base}/manifest.json`, u.origin).toString();
 }
 
@@ -240,6 +289,33 @@ async function fetchBytes(url: string): Promise<Uint8Array> {
   const res = await fetch(url, { credentials: "omit", cache: currentCacheMode });
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
   return new Uint8Array(await res.arrayBuffer());
+}
+
+function isSubmissionsIndex(value: unknown): value is PublisherSubmissionsV1 {
+  if (typeof value !== "object" || value === null) return false;
+  const o = value as Record<string, unknown>;
+  if (o.v !== 1) return false;
+  if (o.kind !== "senn-publisher-submissions") return false;
+  if (!Array.isArray(o.submissions)) return false;
+  for (const s of o.submissions) {
+    if (typeof s !== "object" || s === null) return false;
+    const r = s as Record<string, unknown>;
+    for (const k of [
+      "id",
+      "addonId",
+      "version",
+      "manifestUrl",
+      "signatureUrl",
+      "publicKey",
+      "submittedAt",
+      "contact",
+      "status",
+      "statusUpdatedAt",
+    ]) {
+      if (typeof r[k] !== "string") return false;
+    }
+  }
+  return true;
 }
 
 function isMetaIndex(value: unknown): value is PublisherMetaIndexV1 {
@@ -415,11 +491,18 @@ interface LoadResult {
   // The meta-index's publisher entries, in normalized order. Used to render
   // endorsement chips next to each publisher's row.
   readonly metaPublishers?: readonly PublisherEntryV1[];
+  // ADR-0020 §2 — when the URL turned out to be a submissions document, the
+  // parsed body. Surfaces in the dedicated Submissions section below.
+  readonly submissions?: PublisherSubmissionsV1;
 }
 
 async function loadFromUrl(url: string): Promise<LoadResult> {
-  // Fetch once; decide whether it is a meta-index or a publisher index.
+  // Fetch once; decide whether it is a meta-index, submissions doc, or a
+  // publisher index.
   const value = await fetchJson<unknown>(url);
+  if (isSubmissionsIndex(value)) {
+    return { registries: [], addons: [], submissions: value };
+  }
   if (isMetaIndex(value)) {
     const meta = normalizeMetaIndex(value);
     type Resolved =
@@ -540,6 +623,9 @@ interface State {
   // Per-meta-index publisher list (post-normalisation). Used to render
   // endorsement chips next to each publisher row.
   metaPublishersByUrl: Map<string, readonly PublisherEntryV1[]>;
+  // ADR-0020 §2 — submissions index per source URL. Each entry's
+  // submissions are rendered in the dedicated Submissions section.
+  submissionsByUrl: Map<string, readonly SubmissionV1[]>;
 }
 
 const state: State = {
@@ -550,6 +636,7 @@ const state: State = {
   loadErrors: new Map(),
   metaByUrl: new Map(),
   metaPublishersByUrl: new Map(),
+  submissionsByUrl: new Map(),
 };
 
 function $(sel: string): HTMLElement | null {
@@ -572,7 +659,11 @@ function renderRegistryList(): void {
     const reg = state.registriesByUrl.get(entry.url);
     const err = state.loadErrors.get(entry.url);
     const metaSummary = state.metaByUrl.get(entry.url);
-    if (metaSummary) {
+    const submissions = state.submissionsByUrl.get(entry.url);
+    if (submissions) {
+      meta.dataset.testid = `registry-submissions-${encodeURIComponent(entry.url)}`;
+      meta.textContent = `submissions index · ${submissions.length} submission${submissions.length === 1 ? "" : "s"}`;
+    } else if (metaSummary) {
       // The user pointed at a meta-index. Annotate the row with the
       // discovered publisher count; per-publisher rows are not surfaced
       // separately to keep the list short.
@@ -896,6 +987,115 @@ function renderCards(): void {
   }
 }
 
+function statusBadgeClass(status: SubmissionStatus): string {
+  switch (status) {
+    case "accepted":
+      return "badge badge-ok";
+    case "pending":
+      return "badge badge-featured";
+    case "needs-changes":
+      return "badge badge-warn";
+    case "rejected":
+    case "withdrawn":
+      return "badge badge-fail";
+  }
+}
+
+function renderSubmissions(): void {
+  const section = document.getElementById("submissions") as HTMLElement | null;
+  const list = document.getElementById("submission-cards") as HTMLUListElement | null;
+  if (!section || !list) return;
+  list.replaceChildren();
+
+  // Aggregate every submissions index the user has configured. Deduplicate
+  // by (sourceUrl, submission.id) — submission ids are unique within a
+  // single index per ADR-0020 §2.
+  const all: Array<{ sourceUrl: string; submission: SubmissionV1 }> = [];
+  for (const [sourceUrl, subs] of state.submissionsByUrl) {
+    for (const s of subs) all.push({ sourceUrl, submission: s });
+  }
+  if (all.length === 0) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+
+  for (const { sourceUrl, submission } of all) {
+    const li = document.createElement("li");
+    li.dataset.testid = `submission-card-${submission.id}`;
+
+    const head = document.createElement("div");
+    head.className = "head";
+    const name = document.createElement("strong");
+    name.textContent = `${submission.addonId} v${submission.version}`;
+    const id = document.createElement("span");
+    id.className = "id";
+    id.textContent = submission.id;
+    const statusBadge = document.createElement("span");
+    statusBadge.className = statusBadgeClass(submission.status);
+    statusBadge.dataset.testid = `submission-status-${submission.id}`;
+    statusBadge.textContent = submission.status;
+    head.append(name, id, statusBadge);
+    li.append(head);
+
+    const meta = document.createElement("p");
+    meta.className = "meta mono";
+    meta.textContent = `submitted ${submission.submittedAt} · status updated ${submission.statusUpdatedAt} · key ${fingerprintKey(submission.publicKey)}`;
+    li.append(meta);
+
+    const contact = document.createElement("p");
+    contact.className = "meta mono";
+    contact.dataset.testid = `submission-contact-${submission.id}`;
+    contact.textContent = `contact: ${submission.contact}`;
+    li.append(contact);
+
+    if (submission.statusReason) {
+      const reason = document.createElement("p");
+      reason.className = "meta mono";
+      reason.dataset.testid = `submission-reason-${submission.id}`;
+      reason.textContent = `reason: ${submission.statusReason}`;
+      li.append(reason);
+    }
+
+    if (submission.notes) {
+      const notes = document.createElement("p");
+      notes.className = "muted";
+      notes.dataset.testid = `submission-notes-${submission.id}`;
+      notes.textContent = submission.notes;
+      li.append(notes);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const manifestLink = document.createElement("a");
+    manifestLink.href = submission.manifestUrl;
+    manifestLink.target = "_blank";
+    manifestLink.rel = "noopener noreferrer";
+    manifestLink.textContent = "manifest";
+    manifestLink.className = "secondary";
+    manifestLink.style.textDecoration = "none";
+    manifestLink.dataset.testid = `submission-manifest-${submission.id}`;
+    actions.append(manifestLink);
+    const sigLink = document.createElement("a");
+    sigLink.href = submission.signatureUrl;
+    sigLink.target = "_blank";
+    sigLink.rel = "noopener noreferrer";
+    sigLink.textContent = "signature";
+    sigLink.className = "secondary";
+    sigLink.style.textDecoration = "none";
+    sigLink.dataset.testid = `submission-signature-${submission.id}`;
+    actions.append(sigLink);
+    li.append(actions);
+
+    const sourceFoot = document.createElement("p");
+    sourceFoot.className = "meta mono";
+    sourceFoot.textContent = `via ${sourceUrl}`;
+    li.append(sourceFoot);
+
+    list.append(li);
+  }
+}
+
 interface RefreshOptions {
   readonly bypassCache?: boolean;
 }
@@ -916,16 +1116,21 @@ async function refreshAll(opts: RefreshOptions = {}): Promise<void> {
     state.loadErrors = new Map();
     state.metaByUrl = new Map();
     state.metaPublishersByUrl = new Map();
+    state.submissionsByUrl = new Map();
     renderRegistryList();
     renderCards();
+    renderSubmissions();
 
     for (const entry of state.registries) {
       try {
-        const { registries, addons, meta, metaPublishers } = await loadFromUrl(entry.url);
+        const { registries, addons, meta, metaPublishers, submissions } = await loadFromUrl(
+          entry.url,
+        );
         for (const r of registries) state.registriesByUrl.set(r.url, r.registry);
         state.rows.push(...addons);
         if (meta) state.metaByUrl.set(entry.url, meta);
         if (metaPublishers) state.metaPublishersByUrl.set(entry.url, metaPublishers);
+        if (submissions) state.submissionsByUrl.set(entry.url, submissions.submissions);
       } catch (err) {
         state.loadErrors.set(entry.url, (err as Error).message);
       }
@@ -946,6 +1151,7 @@ async function refreshAll(opts: RefreshOptions = {}): Promise<void> {
     renderRegistryList();
     renderFilters();
     renderCards();
+    renderSubmissions();
   } finally {
     currentCacheMode = previousCache;
   }
