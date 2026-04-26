@@ -1,5 +1,11 @@
 # SENN Core Specification
 
+The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY**
+in this document are to be interpreted as described in [RFC 2119][rfc2119]
+when, and only when, they appear in all capitals.
+
+[rfc2119]: https://www.rfc-editor.org/rfc/rfc2119
+
 ## Core Responsibilities
 
 SENN Core is responsible for:
@@ -24,11 +30,11 @@ A room is a temporary P2P communication context.
 
 ### Requirements
 
-- A room can be created without an account.
-- Room IDs must be random and hard to guess.
-- Room data is not stored on application servers.
-- Invite data may be embedded in URL fragments.
-- QR invites must be supported.
+- A room **MAY** be created without an account.
+- Room IDs **MUST** be random and hard to guess.
+- Room data **MUST NOT** be stored on application servers.
+- Invite data **MAY** be embedded in URL fragments.
+- QR invites **MUST** be supported.
 
 ## Peer Connection
 
@@ -36,11 +42,11 @@ SENN uses WebRTC.
 
 ### Requirements
 
-- Direct P2P is preferred.
-- RTCDataChannel is used for dynamic data.
-- MediaStream is used for voice.
-- Connection state must be visible to users.
-- Failure states must be understandable.
+- Direct P2P **SHOULD** be used; relay (TURN) **MAY** be used as a fallback.
+- RTCDataChannel **MUST** be used for dynamic data.
+- MediaStream **MUST** be used for voice.
+- Connection state **MUST** be visible to users.
+- Failure states **MUST** be understandable.
 
 ## Message Envelope
 
@@ -92,22 +98,23 @@ Peers exchange supported capabilities on connection.
 
 ## Text
 
-- Sent over DataChannel.
-- Small messages are sent without compression.
-- Larger messages may be compressed.
+- Text messages **MUST** be sent over DataChannel.
+- Small messages **MAY** be sent without compression.
+- Larger messages **MAY** be compressed.
 
 ## Voice
 
-- Uses WebRTC MediaStream.
-- Uses browser-native codecs.
-- App-layer compression is not applied.
+- Voice **MUST** use WebRTC MediaStream.
+- Voice **MUST** use browser-native codecs; app-layer compression
+  **MUST NOT** be applied.
 
 ## File Transfer
 
-- Uses DataChannel.
-- Files are chunked.
-- Compress only when useful.
-- Receiver explicitly chooses whether to save.
+- File transfers **MUST** use DataChannel.
+- Files **MUST** be chunked.
+- Implementations **MAY** compress chunks when useful.
+- The receiver **MUST** explicitly choose whether to save the file (no
+  silent disk writes).
 
 ## Presence
 
