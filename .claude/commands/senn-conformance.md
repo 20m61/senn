@@ -1,30 +1,21 @@
 ---
-description: Run the local mirror of the CI conformance gate (typecheck → lint → manifest validators → forbidden-API → registry → addon-sdk shape → drift checks). Reports a punch list of failures.
+description: Run the local-first SENN conformance gate (`pnpm conformance` — typecheck → lint → manifest validators → forbidden-API → registry → addon-sdk shape → drift checks → workspace tests). Reports a punch list of failures. This is the authoritative gate; GitHub Actions is an optional mirror.
 allowed-tools: Bash, Read, Grep
 ---
 
-You are running the **local conformance gate** for SENN. This mirrors
-`.github/workflows/conformance.yml` (the `static` job) so the user finds
-failures before pushing.
+You are running the **authoritative SENN conformance gate**. The repo is
+local-first — `pnpm conformance` (script: `scripts/conformance.sh`) is
+the source of truth, not GitHub Actions.
 
-Run these in order, capturing output. **Do not stop on the first failure** —
-continue and collect every result so the user gets the full picture.
+The single command is:
 
 ```bash
-pnpm typecheck
-pnpm lint
-pnpm validate:all-manifests
-pnpm check:addon-forbidden
-pnpm verify:official
-pnpm test:registry-schema
-pnpm validate:registry addons/official/index.json
-SENN_VERIFY_SDK_OFFLINE=1 pnpm verify:addon-sdk
-pnpm build:addon-sdk
-git status --porcelain apps/web/public/addons examples
-pnpm build:web-registry
-git status --porcelain apps/web/public addons/official
-pnpm test
+pnpm conformance
 ```
+
+The script collects every step's result (it does NOT stop on first
+failure unless `SENN_CONFORMANCE_FAST=1` is set) and prints a green/red
+summary at the end.
 
 After all steps run, report exactly:
 

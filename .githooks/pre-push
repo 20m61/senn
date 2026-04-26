@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# SENN pre-push gate (zero-dependency, project-local).
+#
+# Runs `pnpm conformance` before any push. The conformance script is the
+# authoritative source of truth — the project does not depend on GitHub
+# Actions to enforce its contract.
+#
+# Bypass (for emergencies — surfaces in `git log`):
+#   git push --no-verify
+#
+# Or, set SENN_SKIP_PREPUSH=1 in the environment.
+#
+# Wire-up: `pnpm install` runs the `prepare` script which sets
+#   git config core.hooksPath .githooks
+# so this hook fires automatically. To opt out repo-wide, run:
+#   git config --unset core.hooksPath
+
+set -euo pipefail
+
+if [[ "${SENN_SKIP_PREPUSH:-}" == "1" ]]; then
+  echo "[senn pre-push] SENN_SKIP_PREPUSH=1 — skipping conformance gate." >&2
+  exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "[senn pre-push] pnpm not on PATH — install pnpm or use --no-verify with reason." >&2
+  exit 1
+fi
+
+# Refuse to push to main outright; releases ship via PR from develop.
+remote="${1:-}"
+while read -r local_ref local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      echo "[senn pre-push] Direct push to '$remote $remote_ref' is forbidden — open a PR from develop." >&2
+      exit 1
+      ;;
+  esac
+done
+
+echo "[senn pre-push] running pnpm conformance (local-first gate) …"
+exec pnpm conformance

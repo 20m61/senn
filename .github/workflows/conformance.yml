@@ -1,5 +1,17 @@
 name: conformance
 
+# This workflow is an OPTIONAL mirror of the authoritative local
+# conformance gate. The repo does not depend on GitHub Actions to
+# enforce its contract — the source of truth is `pnpm conformance`
+# (scripts/conformance.sh) plus the .githooks/pre-push hook that
+# `pnpm install` wires up via the `prepare` script.
+#
+# Forks where Actions is unavailable (billing lock, disabled, exhausted
+# minutes, self-hosted runners) still ship safely: contributors run
+# `pnpm conformance` locally and the pre-push hook gates pushes.
+#
+# See docs/dev/conformance.md for details.
+
 on:
   push:
     branches: [develop, main]

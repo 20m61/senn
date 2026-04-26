@@ -45,3 +45,4 @@ Proposed | Accepted | Superseded by ADR-XXXX | Deprecated
 | 0018 | [Add-on SDK type distribution](0018-addon-sdk-types.md) | Accepted |
 | 0019 | [Public npm publish pipeline](0019-publish-pipeline.md) | Accepted (design only; release flow lands as a follow-up) |
 | 0020 | [Registry schema v3 — version histories, submissions, audits](0020-registry-schema-v3.md) | Accepted |
+| 0021 | [Local-first conformance gate (no dependency on GitHub Actions)](0021-local-first-conformance.md) | Proposed |

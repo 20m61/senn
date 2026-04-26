@@ -67,19 +67,33 @@ keys/                 *** signing keys — read/write FORBIDDEN by Claude ***
 | Build addon-sdk runtime        | `pnpm build:addon-sdk`                         |
 | Build web-shipped registry     | `pnpm build:web-registry`                      |
 | License check                  | `pnpm check:licenses`                          |
+| **Full conformance gate**      | `pnpm conformance` *(authoritative — see below)* |
 
-The **conformance gate** (CI: `.github/workflows/conformance.yml`) runs:
-typecheck → lint → `validate:all-manifests` → `check:addon-forbidden` →
-`verify:official` → `test:registry-schema` → `validate:registry` →
-`verify:addon-sdk` → `build:addon-sdk` (no diff) → `build:web-registry` (no diff)
-→ Playwright web e2e (chromium/firefox/webkit) → Playwright gallery e2e.
+### Conformance is local-first
 
-Run `/senn-conformance` to mirror the **static** portion of this locally
-before opening a PR (typecheck through workspace tests; Playwright e2e is
-intentionally skipped — it runs in CI on Chromium / Firefox / WebKit and
-takes ~25 minutes per browser). For Playwright, run
-`pnpm --filter @senn/web e2e --project=chromium` (or the matching project)
-on demand.
+The contract is **`pnpm conformance`** (script: `scripts/conformance.sh`).
+That single command runs typecheck → lint → `validate:all-manifests` →
+`check:addon-forbidden` → `verify:official` → `test:registry-schema` →
+`validate:registry` → `verify:addon-sdk` (offline) → `build:addon-sdk`
+(drift check) → `build:web-registry` (drift check) → workspace tests.
+It is the source of truth for "is this branch safe to open as a PR?"
+
+The pre-push git hook in `.githooks/pre-push` runs `pnpm conformance`
+automatically. `pnpm install` wires it up via the `prepare` script
+(`git config core.hooksPath .githooks`). Bypass — only with reason —
+with `git push --no-verify` or `SENN_SKIP_PREPUSH=1`.
+
+The `/senn-conformance` slash command runs the same gate from inside
+Claude Code.
+
+**Playwright e2e is intentionally not part of `pnpm conformance`** — it
+takes ~25 minutes per browser and is run on demand:
+`pnpm --filter @senn/web e2e --project=chromium` (or `firefox` / `webkit`).
+
+GitHub Actions workflows in `.github/workflows/` (currently
+`conformance.yml`, `publish-addon-sdk.yml`) **mirror** the local gate as
+a convenience for forks that have Actions enabled. They are **not** the
+authority. The repo does not depend on Actions to enforce its contract.
 
 ## Branch policy
 
