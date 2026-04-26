@@ -51,3 +51,20 @@ Keep subjects short and write the body in English.
 If you are submitting an add-on for the official registry, see
 [docs/addon-spec.md](docs/addon-spec.md) for manifest and permission rules,
 and run `scripts/validate-addon-manifest.ts` against your manifest.
+
+## AI-Assisted Contributions
+
+This repository ships project-scoped Claude Code configuration. If you
+contribute via Claude Code (or another agent that respects `CLAUDE.md`),
+your session loads the SENN-specific guardrails automatically:
+
+- The slash commands `/senn-conformance`, `/senn-validate`, `/senn-addon-new`,
+  `/senn-adr-new`, `/senn-spec-review`, `/senn-sign-check`, and `/senn-pr`.
+- Subagents `sdd-expert`, `addon-builder`, `conformance-runner`, `adr-author`.
+- PreToolUse hooks that block edits to `keys/`, `*.key.json`, `.env*`
+  (except `.env.example`), pushes to `main`, force-push, `--no-verify`, and
+  package publishing.
+
+See [docs/dev/README.md §AI-driven](docs/dev/README.md) for the full surface
+and [docs/dev/ai-driven-addon-development.md](docs/dev/ai-driven-addon-development.md)
+for the add-on workflow.

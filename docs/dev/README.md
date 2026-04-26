@@ -42,6 +42,49 @@ bottom of each page before declaring your work done.
 
 → [release.md](release.md)
 
+### I am driving SENN development with an AI coder (Claude Code, etc.)
+
+The repository ships project-scoped Claude Code configuration so AI agents
+operate against the same SDD guardrails as a human contributor:
+
+- **Project memory** — [`/CLAUDE.md`](../../CLAUDE.md) is loaded into every
+  Claude Code session and codifies the file map, branch policy, SDD loop,
+  and security guardrails.
+- **Slash commands** ([`.claude/commands/`](../../.claude/commands/)) —
+  invoke them with `/senn-<name>` from inside Claude Code:
+
+  | Command              | Purpose                                                 |
+  |----------------------|---------------------------------------------------------|
+  | `/senn-conformance`  | Mirror the CI `static` job locally.                     |
+  | `/senn-validate`     | Run manifest + registry + addon-sdk shape validators.   |
+  | `/senn-addon-new`    | Scaffold a new add-on via the `addon-builder` agent.    |
+  | `/senn-adr-new`      | Draft a new ADR via the `adr-author` agent.             |
+  | `/senn-spec-review`  | Run the `sdd-expert` agent on changed spec files.       |
+  | `/senn-sign-check`   | Read-only signature audit (no key access).              |
+  | `/senn-pr`           | Open a PR from the current topic branch into `develop`. |
+
+- **Specialized subagents** ([`.claude/agents/`](../../.claude/agents/)) —
+  delegate scoped work to one of:
+
+  | Agent                | Use when                                                  |
+  |----------------------|-----------------------------------------------------------|
+  | `sdd-expert`         | Reviewing/editing normative specs or ADRs.                |
+  | `addon-builder`      | Scaffolding a new add-on end-to-end (manifest + iframe).  |
+  | `conformance-runner` | Triaging a CI / local gate failure (read-only).           |
+  | `adr-author`         | Drafting a new ADR with the next monotonic ID.            |
+
+- **Guardrail hooks** ([`.claude/hooks/`](../../.claude/hooks/)) — block
+  edits or shell commands that would touch `keys/`, `*.key.json`, `.env*`
+  (except `.env.example`), push to `main`, force-push, skip commit hooks
+  with `--no-verify`, or publish packages locally. The hooks require `jq`
+  on `PATH` (`apt install jq` / `brew install jq`); without `jq` they fail
+  open and the harness-level deny rules in
+  [`.claude/settings.json`](../../.claude/settings.json) still apply.
+
+For background on AI-driven add-on development specifically (prompts,
+review loop, conformance commands), see
+[ai-driven-addon-development.md](ai-driven-addon-development.md).
+
 ## Cross-cutting documents
 
 | Document | Audience | Status |
