@@ -2,8 +2,16 @@
 
 ## Status
 
-Proposed (design only; no implementation follow-up scheduled — this
-ADR sets the contract that future v3 work will land against).
+Accepted.
+
+Validators ship in `scripts/lib/registry-schema.ts` (covered by
+`pnpm test:registry-schema`); the addon-gallery renders v3 fields
+(`audit` badge, `history` details, meta-index `endorsedBy` chips); the
+official registry uses v3 (`addons/official/index.json` v=3, with a
+self-attestation `audit` block on `dev.senn.whiteboard` as the
+worked example). The submissions surface (§2) is validator-only —
+the gallery does not render it yet because no publisher ships
+`submissions/index.json` today.
 
 ## Context
 

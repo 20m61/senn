@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "publisher": {
     "name": "SENN Project",
     "homepage": "https://github.com/20m61/senn"
@@ -24,7 +24,17 @@
       "path": "apps/web/public/addons/whiteboard",
       "capabilities": ["whiteboard-v1"],
       "categories": ["creative"],
-      "tags": ["drawing", "p2p"]
+      "tags": ["drawing", "p2p"],
+      "audit": {
+        "auditor": "SENN Project (self-attestation)",
+        "auditedAt": "2026-04-26T00:00:00Z",
+        "auditedVersion": "0.1.0",
+        "findings": {
+          "summary": "Reviewed against ADR-0006 (sandbox/CSP), ADR-0008 (manifest signing), and ADR-0011 (forbidden APIs). No findings outside the bridge contract.",
+          "severityCounts": { "critical": 0, "high": 0, "medium": 0, "low": 0, "nit": 0 }
+        },
+        "url": "https://github.com/20m61/senn/blob/main/docs/adr/0020-registry-schema-v3.md"
+      }
     },
     {
       "id": "dev.senn.avatar-presence",
