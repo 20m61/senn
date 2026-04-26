@@ -23,7 +23,7 @@
       "Bash(pnpm test:registry-schema:*)",
       "Bash(pnpm build:addon-sdk:*)",
       "Bash(pnpm build:web-registry:*)",
-      "Bash(pnpm stage:gallery-pages:*)",
+      "Bash(pnpm stage:gallery-static:*)",
       "Bash(pnpm --filter:*)",
       "Bash(pnpm -r:*)",
       "Bash(pnpm exec:*)",

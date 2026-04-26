@@ -1,18 +1,20 @@
 #!/usr/bin/env tsx
 /**
- * pnpm stage:gallery-pages
+ * pnpm stage:gallery-static
  *
  * Pre-stages the official publisher index + per-addon manifest pairs
- * into `apps/addon-gallery/dist/` so a GitHub Pages deploy of the
- * gallery is self-contained: the user does not have to type a URL on
- * first visit. The gallery's `defaultRegistryUrl` resolves to
+ * into `apps/addon-gallery/dist/` so a static deploy of the gallery is
+ * self-contained: the user does not have to type a URL on first visit.
+ * The gallery's `defaultRegistryUrl` resolves to
  * `<origin><base>registry/official/index.json`, and `manifestUrlFor`
  * resolves manifests as a sibling of the registry directory, so this
  * script just mirrors the `apps/web/public/{registry,addons}` layout
  * into the gallery's dist.
  *
- * Run AFTER `vite build` (which writes the rest of dist/), and before
- * uploading the artifact to Pages.
+ * Run AFTER `vite build` (which writes the rest of dist/) and before
+ * uploading the artefact to any static host (object storage, shared
+ * rental host, IPFS, intranet file server, etc.). The script is host-
+ * neutral — it produces a self-contained dist directory.
  */
 import { copyFile, cp, mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -85,6 +87,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(`stage-gallery-pages: ${(err as Error).message}`);
+  console.error(`stage-gallery-static: ${(err as Error).message}`);
   process.exit(1);
 });

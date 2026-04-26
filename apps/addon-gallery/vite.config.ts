@@ -5,9 +5,12 @@ import { defineConfig } from "vite";
 // a real publisher URL via the gallery UI, so this proxy is dev-only.
 const PROXY_TARGET = process.env.GALLERY_PROXY_TARGET ?? "http://127.0.0.1:5173";
 
-// GitHub Pages serves at https://<user>.github.io/<repo>/. `GALLERY_BASE`
-// lets the deploy workflow set the public path without code changes; the
-// dev/e2e default is "/" so existing tooling keeps working.
+// Some static hosts serve the gallery from a subpath (e.g.
+// https://example.com/senn-gallery/). `GALLERY_BASE` lets the deploy
+// step set the public path without code changes; the dev/e2e default
+// is "/" so existing tooling keeps working. SENN does not depend on
+// any specific static host — set this to whatever subpath your host
+// uses (or leave as "/" for root-served deployments).
 const BASE = process.env.GALLERY_BASE ?? "/";
 
 export default defineConfig({

@@ -183,10 +183,12 @@ task D adds the gallery to those gates without weakening any.
   vendor-neutral hand-off any third-party SENN host can implement;
   ADR-0007's vendor-neutrality principle continues to hold because the
   gallery is *just one* discovery surface among many a user might use.
-- The gallery can be deployed independently of the main web app (e.g.
-  to GitHub Pages under a different path) without splitting the
-  publisher trust root: the trust still resides in the registry's
-  `trustedKeys`, and the gallery only re-renders that trust.
+- The gallery can be deployed independently of the main web app to any
+  static host (object storage, shared rental host, intranet file
+  server, IPFS, etc. — see ADR-0022 §7 for the host-neutral staging
+  flow), under any subpath, without splitting the publisher trust root:
+  the trust still resides in the registry's `trustedKeys`, and the
+  gallery only re-renders that trust.
 
 ## Alternatives considered
 

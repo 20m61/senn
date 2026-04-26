@@ -194,7 +194,7 @@ function defaultRegistryUrl(): string {
     // If the gallery is served from the same origin as the host, the
     // registry mirror is at <base>registry/official/index.json (matches
     // apps/web/public/registry/official/index.json, optionally prefixed
-    // by Vite's BASE_URL when deployed to a subpath like GitHub Pages).
+    // by Vite's BASE_URL when deployed to a subpath on any static host).
     return `${location.origin.replace(/\/+$/, "")}${basePath()}registry/official/index.json`;
   }
   return "http://127.0.0.1:5173/registry/official/index.json";
@@ -257,8 +257,8 @@ function manifestUrlFor(registryUrl: string, addonPath: string): string {
   // The registry's `path` is repo-relative ("apps/web/public/addons/echo").
   // We use the basename and resolve relative to the registry URL's parent
   // directory, so a registry served at /<prefix>/registry/<publisher>/index.json
-  // (the apps/web/public layout, optionally prefixed for subpath deploys
-  // like GitHub Pages) finds its manifests at /<prefix>/addons/<slug>/...
+  // (the apps/web/public layout, optionally prefixed for subpath deploys on
+  // any static host) finds its manifests at /<prefix>/addons/<slug>/...
   // When the registry URL doesn't match the convention we fall back to
   // <origin>/addons/<slug>/... which preserves the v1 behaviour.
   const u = new URL(registryUrl);
