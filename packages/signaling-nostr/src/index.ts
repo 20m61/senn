@@ -135,6 +135,11 @@ export class NostrSignaling implements SignalingTransport {
     let loopFinalized = false;
     let lastNackMsg: string | undefined;
     let finalizeAndCheck: () => void = () => undefined;
+    // Lifted out so the early "no reachable relay" throw can cancel the
+    // timeout. Without this, the setTimeout fires after the synchronous
+    // throw and surfaces as an unhandled rejection from the abandoned
+    // ackPromise (the throw bypasses `await ackPromise`).
+    let cancelAckTimeout: () => void = () => undefined;
     const ackPromise = new Promise<void>((resolve, reject) => {
       let settled = false;
       let nacked = 0;
@@ -171,6 +176,16 @@ export class NostrSignaling implements SignalingTransport {
         loopFinalized = true;
         tryReject();
       };
+      cancelAckTimeout = () => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        // Do not resolve or reject. The caller's synchronous throw is
+        // the user-visible error and nothing awaits ackPromise on the
+        // early-return path. With `settled = true`, the timer's
+        // callback no-ops if it has already been queued, so no later
+        // rejection can leak.
+      };
     });
 
     const frame = JSON.stringify(["EVENT", event]);
@@ -187,6 +202,7 @@ export class NostrSignaling implements SignalingTransport {
       }
     }
     if (relayCount === 0) {
+      cancelAckTimeout();
       this.pendingAcks.delete(event.id);
       throw new NostrPublishError("no reachable relay");
     }
