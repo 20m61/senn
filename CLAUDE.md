@@ -78,10 +78,19 @@ That single command runs typecheck → lint → `validate:all-manifests` →
 (drift check) → `build:web-registry` (drift check) → workspace tests.
 It is the source of truth for "is this branch safe to open as a PR?"
 
-The pre-push git hook in `.githooks/pre-push` runs `pnpm conformance`
-automatically. `pnpm install` wires it up via the `prepare` script
-(`git config core.hooksPath .githooks`). Bypass — only with reason —
-with `git push --no-verify` or `SENN_SKIP_PREPUSH=1`.
+Git hooks under `.githooks/` (wired up by `pnpm install` via the
+`prepare` script — `git config core.hooksPath .githooks`) enforce the
+gate at three checkpoints:
+
+| Hook         | Scope                                     | Bypass env             |
+|--------------|-------------------------------------------|------------------------|
+| `pre-commit` | staged-file-scoped: protected-path guard, biome on staged files, typecheck (project refs), `validate:addon` on staged manifests, `check:addon-forbidden` on add-on touches, `validate:registry` on registry touches | `SENN_SKIP_PRECOMMIT=1` |
+| `commit-msg` | Conventional Commits subject (`feat\|fix\|docs\|refactor\|test\|chore\|ci\|style\|perf\|build\|revert`) and ≤72-char cap | `SENN_SKIP_COMMITMSG=1` |
+| `pre-push`   | full `pnpm conformance` gate              | `SENN_SKIP_PREPUSH=1`  |
+| `post-merge` | informational nudge if `pnpm-lock.yaml` / `package.json` changed | `SENN_SKIP_POSTMERGE=1` |
+
+`git --no-verify` skips pre-commit / commit-msg / pre-push; the bypass
+surfaces in `git log`. Use only with a documented reason.
 
 The `/senn-conformance` slash command runs the same gate from inside
 Claude Code.
@@ -90,10 +99,12 @@ Claude Code.
 takes ~25 minutes per browser and is run on demand:
 `pnpm --filter @senn/web e2e --project=chromium` (or `firefox` / `webkit`).
 
-GitHub Actions workflows in `.github/workflows/` (currently
-`conformance.yml`, `publish-addon-sdk.yml`) **mirror** the local gate as
-a convenience for forks that have Actions enabled. They are **not** the
-authority. The repo does not depend on Actions to enforce its contract.
+**No CI vendor dependency.** SENN does not ship `.github/workflows/`
+or any other CI vendor configuration. The contract is `pnpm conformance`
+plus the `.githooks/pre-push` hook (ADR-0021). Releases use the local
+`pnpm release:addon-sdk <tag>` script (ADR-0022). Static deploys of the
+web app and gallery use `pnpm build` + `pnpm stage:gallery-static` and
+upload the resulting `dist/` to any static host (no Pages dependency).
 
 ## Branch policy
 

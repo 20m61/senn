@@ -21,15 +21,26 @@ workspace tests) and prints a single PASS/FAIL summary at the end. A
 green run is the ship contract. **The repo does not depend on GitHub
 Actions to enforce its contract.**
 
-The pre-push git hook in `.githooks/pre-push` runs `pnpm conformance`
-automatically. `pnpm install` wires the hook up via the `prepare`
-script (`git config core.hooksPath .githooks`).
+Every check the project enforces is wired to a git hook. `pnpm install`
+sets `git config core.hooksPath .githooks` via the `prepare` script,
+so the hooks fire automatically once dependencies are installed.
+
+| Hook | Triggers | Sequence |
+|------|----------|----------|
+| `.githooks/pre-commit` | every `git commit` | (a) protected-path guard (`keys/`, `*.key.json`, `.env*` except `.env.example`, `*.pem`, `*.key`, `id_*`); (b) `biome check` on staged `.ts/.tsx/.js/.json/.css/...` files; (c) `pnpm typecheck` if any `.ts/.tsx` is staged; (d) `pnpm validate:addon` on each staged `addons/*/manifest.json` or `examples/*/manifest.json`; (e) `pnpm check:addon-forbidden` if any add-on file is staged; (f) `pnpm validate:registry` if `addons/official/index.json` is staged |
+| `.githooks/commit-msg` | every `git commit` | Conventional Commits subject (`feat\|fix\|docs\|refactor\|test\|chore\|ci\|style\|perf\|build\|revert`, optional `(scope)`, optional `!`, ≤72 chars); skips merge / fixup / squash / WIP commits |
+| `.githooks/pre-push` | every `git push` | `pnpm conformance` (the full gate above); refuses pushes targeting `refs/heads/main` |
+| `.githooks/post-merge` | after `git pull` / `git merge` | informational only — warns if `pnpm-lock.yaml` or any `package.json` changed, suggesting `pnpm install --frozen-lockfile` |
 
 Bypass (emergency only — surfaces in `git log`):
 
 ```sh
-git push --no-verify           # one-time
-SENN_SKIP_PREPUSH=1 git push   # one-time, env form
+git commit --no-verify             # skip pre-commit + commit-msg
+SENN_SKIP_PRECOMMIT=1 git commit   # one-time, env form
+SENN_SKIP_COMMITMSG=1 git commit   # one-time, env form
+git push --no-verify               # skip pre-push
+SENN_SKIP_PREPUSH=1 git push       # one-time, env form
+SENN_SKIP_POSTMERGE=1 git pull     # silence post-merge nudge
 git config --unset core.hooksPath  # repo-wide opt-out (discouraged)
 ```
 
@@ -120,21 +131,21 @@ When editing `docs/`:
 - `docs/roadmap.md` reflects the new state.
 - ADRs touched by the release are `Accepted`, not `Proposed`.
 
-## CI (optional, not authoritative)
+## No CI vendor dependency
 
-`.github/workflows/conformance.yml` mirrors the local gate as a
-convenience for forks that have GitHub Actions enabled. It is **not**
-the source of truth — the local `pnpm conformance` run is. If Actions
-is unavailable on a fork (billing lock, self-hosted runners exhausted,
-disabled at the org level), the project still ships: contributors run
-`pnpm conformance` locally and the pre-push hook gates merges.
+SENN does not ship a CI vendor configuration. The repo does not contain
+`.github/workflows/`, `.gitlab-ci.yml`, or any equivalent: the contract
+is `pnpm conformance` plus the `.githooks/pre-push` hook (ADR-0021).
 
-The two CI jobs:
+Forks MAY add a CI vendor of their choice, but they MUST keep that
+configuration as a *mirror* of `scripts/conformance.sh` — never as the
+authority. A fork without any CI is fully capable of producing a
+conformant release: contributors run `pnpm conformance` locally and the
+pre-push hook gates merges.
 
-1. **static** — same step sequence as `pnpm conformance`.
-2. **e2e** — `pnpm --filter @senn/web e2e --project=<browser>` matrix
-   across Chromium / Firefox / WebKit. Run locally on demand only when
-   touching code that crosses the WebRTC / DataChannel boundary; one
-   browser project is usually enough for inner-loop iteration.
+Browser e2e is on-demand only — `pnpm --filter @senn/web e2e --project=<browser>`
+across Chromium / Firefox / WebKit. Run locally when touching code that
+crosses the WebRTC / DataChannel boundary; one browser project is
+usually enough for inner-loop iteration.
 
 PRs without local conformance evidence will be sent back.

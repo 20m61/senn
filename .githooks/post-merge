@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# SENN post-merge nudge.
+#
+# After a `git pull` / `git merge`, warn if the lockfile or any
+# package.json changed — running tests against a stale node_modules is
+# the classic source of "works on my machine" pre-push failures.
+#
+# Bypass: SENN_SKIP_POSTMERGE=1 git pull
+#
+# This hook is informational only — never exits non-zero.
+
+set -uo pipefail
+
+if [[ "${SENN_SKIP_POSTMERGE:-}" == "1" ]]; then
+  exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+# ORIG_HEAD is set by merge / pull; if it is missing we have nothing to
+# diff against, so just exit quietly.
+if ! git rev-parse --verify --quiet ORIG_HEAD >/dev/null; then
+  exit 0
+fi
+
+changed=$(git diff --name-only ORIG_HEAD HEAD -- 'pnpm-lock.yaml' '**/package.json' 'package.json' 2>/dev/null || true)
+
+if [[ -n "$changed" ]]; then
+  echo "" >&2
+  echo "[senn post-merge] dependency manifest changed in this pull:" >&2
+  echo "$changed" | sed 's/^/  - /' >&2
+  echo "  → run \`pnpm install --frozen-lockfile\` before testing." >&2
+  echo "" >&2
+fi

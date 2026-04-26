@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# SENN pre-commit gate (zero-dependency, project-local).
+#
+# Fast, staged-file-scoped checks. The full gate runs at pre-push
+# (`pnpm conformance`) — this hook catches the cheapest classes of bug
+# before a commit object is even created, so the dev loop stays tight.
+#
+# Sequence (each step runs only if its trigger files are staged):
+#   1. Protected-path guard — refuse to commit keys/, *.key.json, .env*
+#      (defense-in-depth alongside the .claude/settings.json deny rules)
+#   2. Biome check (lint + format) — runs only when staged files are
+#      something biome actually owns (.ts, .tsx, .js, .json, .css, etc.)
+#   3. Typecheck (project references — fast incremental) — runs only
+#      when *.ts / *.tsx is staged
+#   4. Manifest validator — runs only when an add-on manifest.json under
+#      addons/ or examples/ is staged
+#   5. Forbidden-API grep — runs only when add-on source files are
+#      staged (under addons/ or apps/web/public/addons/)
+#
+# Bypass (for emergencies — surfaces in `git log` via the next commit):
+#   git commit --no-verify
+#   SENN_SKIP_PRECOMMIT=1 git commit ...
+#
+# Wire-up: pnpm install runs `prepare` which sets
+#   git config core.hooksPath .githooks
+# so this hook fires automatically.
+
+set -uo pipefail
+
+if [[ "${SENN_SKIP_PRECOMMIT:-}" == "1" ]]; then
+  echo "[senn pre-commit] SENN_SKIP_PRECOMMIT=1 — skipping checks." >&2
+  exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "[senn pre-commit] pnpm not on PATH — install pnpm or use --no-verify with reason." >&2
+  exit 1
+fi
+
+# Collect the staged file list once. We want added/copied/modified/renamed
+# files only — deletions cannot fail any of the checks below.
+mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if [[ ${#staged[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+overall=0
+
+# ────────────────────────────────────────────────────────────────────
+# 1. Protected-path guard (always runs).
+# Refuses to commit anything under keys/, *.key.json, or .env / .env.*
+# (the .env.example file is the one allowed env-shaped path).
+# ────────────────────────────────────────────────────────────────────
+declare -a forbidden=()
+for f in "${staged[@]}"; do
+  case "$f" in
+    keys/*|*/keys/*) forbidden+=("$f") ;;
+    *.key.json)      forbidden+=("$f") ;;
+    .env)            forbidden+=("$f") ;;
+    .env.example)    : ;;  # explicitly allowed
+    .env.*)          forbidden+=("$f") ;;
+    *.pem|*.key|id_rsa|id_ed25519) forbidden+=("$f") ;;
+  esac
+done
+if [[ ${#forbidden[@]} -gt 0 ]]; then
+  echo "[senn pre-commit] refusing to commit protected paths:" >&2
+  for f in "${forbidden[@]}"; do
+    echo "  - $f" >&2
+  done
+  echo "  See CLAUDE.md §Security & privacy guardrails / ADR-0009." >&2
+  exit 1
+fi
+
+# Helper that runs a step and tracks overall pass/fail without bailing
+# on the first failure (so the developer sees every problem at once).
+step() {
+  local name=$1; shift
+  printf "\n\033[1;36m▶ pre-commit: %s\033[0m\n" "$name"
+  if "$@"; then
+    return 0
+  fi
+  echo "[senn pre-commit] FAIL: $name" >&2
+  overall=1
+}
+
+# ────────────────────────────────────────────────────────────────────
+# 2. Biome check on staged files (lint + format).
+# Only run if at least one staged file is something biome owns. We pass
+# the staged paths explicitly so biome only inspects what is being
+# committed, not the whole tree.
+# ────────────────────────────────────────────────────────────────────
+declare -a biome_targets=()
+for f in "${staged[@]}"; do
+  case "$f" in
+    *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.json|*.jsonc|*.css) biome_targets+=("$f") ;;
+  esac
+done
+if [[ ${#biome_targets[@]} -gt 0 ]]; then
+  step "biome check (staged files)" \
+    pnpm exec biome check --no-errors-on-unmatched "${biome_targets[@]}"
+fi
+
+# ────────────────────────────────────────────────────────────────────
+# 3. Typecheck (project references, incremental).
+# Cheap on warm builds; only run when TS sources are staged.
+# ────────────────────────────────────────────────────────────────────
+declare -a ts_staged=()
+for f in "${staged[@]}"; do
+  case "$f" in
+    *.ts|*.tsx) ts_staged+=("$f") ;;
+  esac
+done
+if [[ ${#ts_staged[@]} -gt 0 ]]; then
+  step "typecheck (project refs)" pnpm typecheck
+fi
+
+# ────────────────────────────────────────────────────────────────────
+# 4. Manifest validator on every staged manifest.json under addons/ or
+#    examples/ (the validator is fast — one file at a time).
+# ────────────────────────────────────────────────────────────────────
+declare -a manifest_targets=()
+for f in "${staged[@]}"; do
+  case "$f" in
+    addons/*/manifest.json|addons/*/*/manifest.json|examples/*/manifest.json|examples/*/*/manifest.json)
+      manifest_targets+=("$f") ;;
+  esac
+done
+if [[ ${#manifest_targets[@]} -gt 0 ]]; then
+  for m in "${manifest_targets[@]}"; do
+    step "validate:addon ($m)" pnpm validate:addon "$m"
+  done
+fi
+
+# ────────────────────────────────────────────────────────────────────
+# 5. Forbidden-API grep on add-on source.
+# The `pnpm check:addon-forbidden` script walks every add-on directory;
+# it is fast enough to run once whenever any add-on file is staged.
+# ────────────────────────────────────────────────────────────────────
+addon_touched=0
+for f in "${staged[@]}"; do
+  case "$f" in
+    addons/*|apps/web/public/addons/*) addon_touched=1; break ;;
+  esac
+done
+if [[ $addon_touched -eq 1 ]]; then
+  step "check:addon-forbidden" pnpm check:addon-forbidden
+fi
+
+# ────────────────────────────────────────────────────────────────────
+# 6. Registry index validation when index.json under addons/official/ is
+#    staged.
+# ────────────────────────────────────────────────────────────────────
+for f in "${staged[@]}"; do
+  if [[ "$f" == "addons/official/index.json" ]]; then
+    step "validate:registry" pnpm validate:registry addons/official/index.json
+    break
+  fi
+done
+
+if [[ $overall -ne 0 ]]; then
+  echo "" >&2
+  echo "[senn pre-commit] one or more checks failed; commit aborted." >&2
+  echo "  - re-stage fixes and try again, or" >&2
+  echo "  - bypass for emergencies: git commit --no-verify (or SENN_SKIP_PRECOMMIT=1)" >&2
+  exit 1
+fi
