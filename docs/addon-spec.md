@@ -1,10 +1,16 @@
 # SENN Add-on Specification
 
+The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY**
+in this document are to be interpreted as described in [RFC 2119][rfc2119]
+when, and only when, they appear in all capitals.
+
+[rfc2119]: https://www.rfc-editor.org/rfc/rfc2119
+
 ## Definition
 
 A SENN add-on is a static UI and logic module.
-Add-ons can create communication experiences, but they cannot directly own network connections.
-Dynamic data flow must go through SENN Core.
+Add-ons **MAY** create communication experiences but **MUST NOT** directly
+own network connections. Dynamic data flow **MUST** go through SENN Core.
 
 ## Add-on Package
 
@@ -121,7 +127,7 @@ land in follow-up PRs.
 
 ## Forbidden
 
-Add-ons must not:
+Add-ons **MUST NOT**:
 
 - Directly use WebSocket for dynamic user data.
 - Directly use WebRTC.
@@ -136,17 +142,21 @@ Add-ons must not:
 
 ## Runtime
 
-Add-ons run in sandboxed iframes.
-
-Recommended:
+Add-ons **MUST** run in sandboxed iframes. The host **SHOULD** declare the
+iframe as follows:
 
 ```html
 <iframe sandbox="allow-scripts" src="addon/index.html"></iframe>
 ```
 
+The host **MUST NOT** add `allow-same-origin`, `allow-top-navigation`, or
+`allow-popups-to-escape-sandbox` to add-on iframes.
+
 ## CSP
 
-Default CSP for add-ons:
+The host **MUST** apply the following Content-Security-Policy to every
+add-on iframe (additional restrictions **MAY** be added; the listed
+directives **MUST NOT** be relaxed):
 
 ```
 default-src 'self';
