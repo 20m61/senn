@@ -236,6 +236,83 @@ test.describe("Add-on gallery smoke (ADR-0016)", () => {
     await ctx.close();
   });
 
+  test("renders audit badge for v3 addon entries (ADR-0020 §3a)", async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await seedHostAndRegistry(page);
+    await page.goto("/");
+    await expect(page.locator("#config-status")).toContainText("loaded", { timeout: SHORT });
+
+    // The official registry's whiteboard entry carries an audit block per
+    // ADR-0020 §3a; the gallery surfaces it as a badge in the card head.
+    const badge = page.locator('[data-testid="addon-audit-dev.senn.whiteboard"]');
+    await expect(badge).toBeVisible({ timeout: SHORT });
+    await expect(badge).toHaveText(/audited v0\.1\.0/);
+
+    // Echo has no audit, so no badge should render for it.
+    await expect(page.locator('[data-testid="addon-audit-dev.senn.echo"]')).toHaveCount(0);
+
+    await ctx.close();
+  });
+
+  test("renders endorsement chips on meta-index rows (ADR-0020 §3b)", async ({ browser }) => {
+    const META_URL = "http://127.0.0.1:5173/registry/official/meta-endorsed.json";
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+
+    await page.route(META_URL, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          v: 1,
+          kind: "senn-publisher-meta",
+          publishers: [
+            {
+              url: PROXIED_REGISTRY_URL,
+              name: "SENN Project (mock)",
+              featured: true,
+              endorsedBy: ["Acme Sec", "FooCorp Audit"],
+              endorsementUrl: "https://example.invalid/endorse",
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.addInitScript(
+      ({ metaUrl, hostOrigin }) => {
+        try {
+          localStorage.setItem("senn.gallery.registries", JSON.stringify([{ url: metaUrl }]));
+          localStorage.setItem("senn.gallery.host-origin", hostOrigin);
+        } catch {
+          /* localStorage may not be available; addInitScript will retry per nav */
+        }
+      },
+      { metaUrl: META_URL, hostOrigin: "http://127.0.0.1:5173" },
+    );
+    await page.goto("/");
+
+    await expect(page.locator("#config-status")).toContainText("loaded", { timeout: SHORT });
+
+    // The meta row caption appends "1 endorsed".
+    const metaRow = page.locator(`[data-testid="registry-meta-${encodeURIComponent(META_URL)}"]`);
+    await expect(metaRow).toContainText("1 endorsed");
+
+    // Per-publisher endorsement chips render under the row.
+    const endorseRow = page.locator(
+      `[data-testid="registry-meta-endorsement-${encodeURIComponent(META_URL)}-${encodeURIComponent(PROXIED_REGISTRY_URL)}"]`,
+    );
+    await expect(endorseRow).toBeVisible();
+    await expect(endorseRow).toContainText("Acme Sec");
+    await expect(endorseRow).toContainText("FooCorp Audit");
+    // The endorsementUrl link is rendered as a "(report)" anchor.
+    const reportLink = endorseRow.getByRole("link", { name: "(report)" });
+    await expect(reportLink).toHaveAttribute("href", "https://example.invalid/endorse");
+
+    await ctx.close();
+  });
+
   test("refresh button re-runs every load with cache: reload", async ({ browser }) => {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();

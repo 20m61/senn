@@ -17,11 +17,44 @@ import {
   verifyManifest,
 } from "@senn/manifest";
 
-// Accepts ADR-0017 v1 + v2 inputs.
+// Accepts ADR-0017 v1/v2 + ADR-0020 v3 inputs.
 interface AddonDeprecation {
   readonly since: string;
   readonly reason: string;
   readonly supersededBy?: string;
+}
+
+interface AddonYank {
+  readonly at: string;
+  readonly reason: string;
+}
+
+interface AddonVersionEntry {
+  readonly version: string;
+  readonly path: string;
+  readonly signedAt: string;
+  readonly publicKey: string;
+  readonly changelog?: string;
+  readonly yanked?: AddonYank;
+}
+
+interface AddonAuditFindings {
+  readonly summary: string;
+  readonly severityCounts?: {
+    readonly critical?: number;
+    readonly high?: number;
+    readonly medium?: number;
+    readonly low?: number;
+    readonly nit?: number;
+  };
+}
+
+interface AddonAudit {
+  readonly auditor: string;
+  readonly auditedAt: string;
+  readonly auditedVersion: string;
+  readonly findings: AddonAuditFindings;
+  readonly url?: string;
 }
 
 interface RegistryAddonV1 {
@@ -34,10 +67,13 @@ interface RegistryAddonV1 {
   readonly categories?: readonly string[];
   readonly tags?: readonly string[];
   readonly deprecated?: AddonDeprecation;
+  // ADR-0020 v3 — optional.
+  readonly history?: readonly AddonVersionEntry[];
+  readonly audit?: AddonAudit;
 }
 
 interface RegistryV1 {
-  readonly v: 1 | 2;
+  readonly v: 1 | 2 | 3;
   readonly publisher: { readonly name: string; readonly homepage?: string };
   readonly trustedKeys: readonly string[];
   readonly addons: readonly RegistryAddonV1[];
@@ -75,11 +111,13 @@ interface AddonRow {
   readonly metaFeatured?: boolean;
 }
 
-// ADR-0017 §3 — PublisherMetaIndexV1.
+// ADR-0017 §3 — PublisherMetaIndexV1, extended by ADR-0020 §3b.
 interface PublisherEntryV1 {
   readonly url: string;
   readonly name?: string;
   readonly featured?: boolean;
+  readonly endorsedBy?: readonly string[];
+  readonly endorsementUrl?: string;
 }
 
 interface PublisherMetaIndexV1 {
@@ -99,6 +137,10 @@ interface MetaSummary {
   readonly publisherCount: number;
   readonly featuredCount: number;
   readonly errors: readonly MetaPublisherError[];
+  // ADR-0020 §3b — endorsement decorations are surfaced per meta row, but
+  // the summary keeps a flat count so the registry-list caption can append
+  // a tail like "· 2 endorsed".
+  readonly endorsedCount: number;
 }
 
 const LS_REGISTRIES = "senn.gallery.registries";
@@ -213,6 +255,30 @@ function isMetaIndex(value: unknown): value is PublisherMetaIndexV1 {
   return true;
 }
 
+function normalizeEndorsedBy(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: string[] = [];
+  for (const v of value) {
+    if (typeof v !== "string") continue;
+    const t = v.trim();
+    if (t.length === 0 || t.length > 80) continue;
+    out.push(t);
+    if (out.length >= 8) break;
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function normalizeEndorsementUrl(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const u = new URL(value);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return undefined;
+    return u.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizeMetaIndex(value: PublisherMetaIndexV1): PublisherMetaIndexV1 {
   const seen = new Set<string>();
   const publishers: PublisherEntryV1[] = [];
@@ -225,12 +291,18 @@ function normalizeMetaIndex(value: PublisherMetaIndexV1): PublisherMetaIndexV1 {
       continue;
     }
     seen.add(p.url);
+    const endorsedBy = normalizeEndorsedBy((p as { endorsedBy?: unknown }).endorsedBy);
+    const endorsementUrl = normalizeEndorsementUrl(
+      (p as { endorsementUrl?: unknown }).endorsementUrl,
+    );
     publishers.push({
       url: p.url,
       ...(typeof p.name === "string" && p.name.length > 0 && p.name.length <= 80
         ? { name: p.name }
         : {}),
       ...(typeof p.featured === "boolean" ? { featured: p.featured } : {}),
+      ...(endorsedBy ? { endorsedBy } : {}),
+      ...(endorsementUrl ? { endorsementUrl } : {}),
     });
   }
   // Featured publishers come first; original order preserved within groups.
@@ -241,7 +313,7 @@ function normalizeMetaIndex(value: PublisherMetaIndexV1): PublisherMetaIndexV1 {
 function isRegistry(value: unknown): value is RegistryV1 {
   if (typeof value !== "object" || value === null) return false;
   const o = value as Record<string, unknown>;
-  if (o.v !== 1 && o.v !== 2) return false;
+  if (o.v !== 1 && o.v !== 2 && o.v !== 3) return false;
   if (typeof o.publisher !== "object" || o.publisher === null) return false;
   const pub = o.publisher as Record<string, unknown>;
   if (typeof pub.name !== "string") return false;
@@ -340,6 +412,9 @@ interface LoadResult {
   readonly registries: ReadonlyArray<{ url: string; registry: RegistryV1 }>;
   readonly addons: AddonRow[];
   readonly meta?: MetaSummary;
+  // The meta-index's publisher entries, in normalized order. Used to render
+  // endorsement chips next to each publisher's row.
+  readonly metaPublishers?: readonly PublisherEntryV1[];
 }
 
 async function loadFromUrl(url: string): Promise<LoadResult> {
@@ -384,10 +459,21 @@ async function loadFromUrl(url: string): Promise<LoadResult> {
       throw new Error(`meta-index at ${url} resolved no publishers (${detail || "no entries"})`);
     }
     const featuredCount = meta.publishers.reduce((n, p) => n + (p.featured ? 1 : 0), 0);
+    const endorsedCount = meta.publishers.reduce(
+      (n, p) => n + ((p.endorsedBy?.length ?? 0) > 0 ? 1 : 0),
+      0,
+    );
     return {
       registries,
       addons,
-      meta: { url, publisherCount: meta.publishers.length, featuredCount, errors },
+      meta: {
+        url,
+        publisherCount: meta.publishers.length,
+        featuredCount,
+        endorsedCount,
+        errors,
+      },
+      metaPublishers: meta.publishers,
     };
   }
   if (!isRegistry(value)) throw new Error(`registry schema invalid: ${url}`);
@@ -451,6 +537,9 @@ interface State {
   // For each user-configured URL that turned out to be a meta-index, a
   // summary the registry list can render.
   metaByUrl: Map<string, MetaSummary>;
+  // Per-meta-index publisher list (post-normalisation). Used to render
+  // endorsement chips next to each publisher row.
+  metaPublishersByUrl: Map<string, readonly PublisherEntryV1[]>;
 }
 
 const state: State = {
@@ -460,6 +549,7 @@ const state: State = {
   registriesByUrl: new Map(),
   loadErrors: new Map(),
   metaByUrl: new Map(),
+  metaPublishersByUrl: new Map(),
 };
 
 function $(sel: string): HTMLElement | null {
@@ -492,7 +582,9 @@ function renderRegistryList(): void {
       meta.dataset.testid = `registry-meta-${encodeURIComponent(entry.url)}`;
       const featuredTail =
         metaSummary.featuredCount > 0 ? ` · ${metaSummary.featuredCount} featured` : "";
-      meta.textContent = `meta-index · ${expanded.size} of ${metaSummary.publisherCount} publishers loaded${featuredTail}`;
+      const endorsedTail =
+        metaSummary.endorsedCount > 0 ? ` · ${metaSummary.endorsedCount} endorsed` : "";
+      meta.textContent = `meta-index · ${expanded.size} of ${metaSummary.publisherCount} publishers loaded${featuredTail}${endorsedTail}`;
     } else if (reg) {
       meta.textContent = `${reg.publisher.name} · ${reg.addons.length} addons · key ${fingerprintKey(reg.trustedKeys[0] ?? "")}`;
     } else if (err) {
@@ -512,6 +604,40 @@ function renderRegistryList(): void {
         errorList.append(eli);
       }
       left.append(errorList);
+    }
+    // ADR-0020 §3b — render endorsement chips per publisher entry, if any.
+    const metaPublishers = state.metaPublishersByUrl.get(entry.url);
+    if (metaPublishers?.some((p) => (p.endorsedBy?.length ?? 0) > 0)) {
+      const endorseList = document.createElement("ul");
+      endorseList.className = "muted meta-endorsements";
+      endorseList.dataset.testid = `registry-meta-endorsements-${encodeURIComponent(entry.url)}`;
+      for (const p of metaPublishers) {
+        const labels = p.endorsedBy ?? [];
+        if (labels.length === 0) continue;
+        const eli = document.createElement("li");
+        eli.dataset.testid = `registry-meta-endorsement-${encodeURIComponent(entry.url)}-${encodeURIComponent(p.url)}`;
+        const who = document.createElement("span");
+        who.className = "mono";
+        who.textContent = `${p.name ?? p.url}: `;
+        eli.append(who);
+        for (const label of labels) {
+          const chip = document.createElement("span");
+          chip.className = "badge badge-endorsement";
+          chip.textContent = label;
+          eli.append(chip, document.createTextNode(" "));
+        }
+        if (p.endorsementUrl) {
+          const link = document.createElement("a");
+          link.href = p.endorsementUrl;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = "(report)";
+          link.className = "mono";
+          eli.append(link);
+        }
+        endorseList.append(eli);
+      }
+      left.append(endorseList);
     }
     const remove = document.createElement("button");
     remove.type = "button";
@@ -650,6 +776,14 @@ function renderCards(): void {
       }`;
       head.append(dep);
     }
+    if (row.addon.audit) {
+      const audited = document.createElement("span");
+      audited.className = "badge badge-audit";
+      audited.dataset.testid = `addon-audit-${row.addon.id}`;
+      audited.textContent = `audited v${row.addon.audit.auditedVersion}`;
+      audited.title = `${row.addon.audit.auditor} · ${row.addon.audit.auditedAt} — ${row.addon.audit.findings.summary}`;
+      head.append(audited);
+    }
     li.append(head);
 
     const desc = document.createElement("p");
@@ -666,6 +800,40 @@ function renderCards(): void {
         : "";
       depRow.textContent = `deprecated since ${row.addon.deprecated.since}: ${row.addon.deprecated.reason}${supersededBy}`;
       li.append(depRow);
+    }
+
+    if (row.addon.history && row.addon.history.length > 0) {
+      const det = document.createElement("details");
+      det.className = "meta mono";
+      det.dataset.testid = `addon-history-${row.addon.id}`;
+      const sum = document.createElement("summary");
+      sum.textContent = `version history (${row.addon.history.length})`;
+      det.append(sum);
+      const ul = document.createElement("ul");
+      ul.className = "history-list";
+      for (const h of row.addon.history) {
+        const hi = document.createElement("li");
+        hi.dataset.testid = `addon-history-entry-${row.addon.id}-${h.version}`;
+        const head = document.createElement("span");
+        head.textContent = `v${h.version} · ${h.signedAt} · ${fingerprintKey(h.publicKey)}`;
+        hi.append(head);
+        if (h.yanked) {
+          const yanked = document.createElement("span");
+          yanked.className = "badge badge-fail";
+          yanked.textContent = "yanked";
+          yanked.title = `yanked ${h.yanked.at}: ${h.yanked.reason}`;
+          hi.append(document.createTextNode(" "), yanked);
+        }
+        if (h.changelog) {
+          const cl = document.createElement("p");
+          cl.className = "muted";
+          cl.textContent = h.changelog;
+          hi.append(cl);
+        }
+        ul.append(hi);
+      }
+      det.append(ul);
+      li.append(det);
     }
 
     const caps = document.createElement("p");
@@ -747,15 +915,17 @@ async function refreshAll(opts: RefreshOptions = {}): Promise<void> {
     state.registriesByUrl = new Map();
     state.loadErrors = new Map();
     state.metaByUrl = new Map();
+    state.metaPublishersByUrl = new Map();
     renderRegistryList();
     renderCards();
 
     for (const entry of state.registries) {
       try {
-        const { registries, addons, meta } = await loadFromUrl(entry.url);
+        const { registries, addons, meta, metaPublishers } = await loadFromUrl(entry.url);
         for (const r of registries) state.registriesByUrl.set(r.url, r.registry);
         state.rows.push(...addons);
         if (meta) state.metaByUrl.set(entry.url, meta);
+        if (metaPublishers) state.metaPublishersByUrl.set(entry.url, metaPublishers);
       } catch (err) {
         state.loadErrors.set(entry.url, (err as Error).message);
       }
