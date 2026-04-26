@@ -45,7 +45,36 @@ All dynamic data flow is handled by SENN Core through permission-controlled P2P 
 - Sandboxed add-on execution
 - Permission-based APIs
 - Local-first persistence
+- Local-first development and release (no CI/CD vendor dependency)
 - Community-driven ecosystem
+
+## Local-first development
+
+SENN does not depend on any specific CI/CD vendor or hosted-pages
+provider. The project's correctness contract is enforced **locally**:
+
+- **Conformance**: `pnpm conformance` (`scripts/conformance.sh`) is the
+  authoritative gate — typecheck, lint, manifest validators,
+  forbidden-API grep, signature verifier, registry schema, addon-sdk
+  shape, drift checks, and workspace tests. The pre-push git hook
+  under `.githooks/` runs it automatically. (See
+  [ADR-0021](docs/adr/0021-local-first-conformance.md) and
+  [docs/dev/conformance.md](docs/dev/conformance.md).)
+- **Release**: `pnpm release:addon-sdk <tag>`
+  (`scripts/publish-addon-sdk.sh`) publishes `@senn/addon-sdk` from a
+  maintainer machine — no GitHub Actions workflow, no `NPM_TOKEN`
+  secret on the repository. (See
+  [ADR-0022](docs/adr/0022-local-first-publish-pipeline.md) and
+  [docs/dev/release.md](docs/dev/release.md).)
+- **Static deploy**: `pnpm build` + `pnpm stage:gallery-static`
+  produces a self-contained `dist/` directory deployable to any static
+  host (object storage, shared rental host, IPFS, intranet file
+  server, …). The web app and gallery name no specific host.
+
+Forks MAY add a CI vendor mirror in their fork, but the canonical
+repository ships no `.github/workflows/` or equivalent vendor-specific
+configuration. A fork without any CI is fully capable of producing a
+conformant release.
 
 ## Repository Layout
 
@@ -102,7 +131,9 @@ public release. The wire layer is implemented end-to-end:
   public privacy.md.
 - Conformance gates: typecheck + biome lint + vitest (93 tests across
   the 7 packages) + Playwright e2e on Chromium / Firefox / WebKit +
-  manifest validator + forbidden-API grep + sig verifier.
+  manifest validator + forbidden-API grep + sig verifier — all wired
+  to local git hooks (`.githooks/{pre-commit,commit-msg,pre-push}`),
+  no CI vendor required.
 - A static `pnpm --filter @senn/web build` produces a ~76 KB
   (gzip 24 KB) JS bundle plus addon assets, deployable to any static
   host (see `docs/deployment.md`).
