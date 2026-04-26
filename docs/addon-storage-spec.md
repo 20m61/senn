@@ -1,5 +1,11 @@
 # Add-on Storage Specification
 
+The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY**
+in this document are to be interpreted as described in [RFC 2119][rfc2119]
+when, and only when, they appear in all capitals.
+
+[rfc2119]: https://www.rfc-editor.org/rfc/rfc2119
+
 ## Intent
 
 Define the local-first key/value storage that SENN Core exposes to
