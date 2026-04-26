@@ -68,7 +68,7 @@ under the same scope, version policy, and CI flow defined here.
   scoped packages default to private).
 - Owner: the SENN Project npm organisation. The exact membership and
   recovery flow is operational (not technical) and lives in
-  `docs/release.md`, not in this ADR.
+  `docs/dev/release.md`, not in this ADR.
 - 2FA: every publisher account MUST enable npm 2FA at the auth-and-
   publish level. CI uses an automation token scoped to publish only
   under `@senn/`, configured with `npm publish --provenance`.
@@ -284,7 +284,7 @@ remains one invocation.
 - Two more regression guards in `verify:addon-sdk`. Both are short and
   the script already exists.
 - `0.x` versioning means downstreams pinning `~0.1` are signing up for
-  potential breaking changes at `0.2`. Documented in `docs/release.md`
+  potential breaking changes at `0.2`. Documented in `docs/dev/release.md`
   alongside the publish flow.
 
 ### Out of scope
@@ -310,7 +310,7 @@ remains one invocation.
   in §5. Trigger on `push.tags: ['addon-sdk-v*']`.
 - `scripts/verify-addon-sdk.ts`: extend with the §6 (a) version-bump
   guard and (b) runtime-byte-equality guard.
-- `docs/release.md` (new or extended): the operational runbook —
+- `docs/dev/release.md` (new or extended): the operational runbook —
   who has publish rights, the bump-and-tag dance, rollback
   (`npm deprecate`).
 - `docs/dev/writing-an-addon.md`: add a "Install" subsection pointing

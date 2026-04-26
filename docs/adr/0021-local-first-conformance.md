@@ -2,7 +2,10 @@
 
 ## Status
 
-Proposed (2026-04-26)
+Accepted (2026-04-26). Implementation landed in commit `bb7baeb`
+(local-first conformance gate; pre-push hook + `pnpm conformance` +
+optional Actions mirror). `pnpm conformance` is the contract;
+`.github/workflows/` are optional mirrors.
 
 ## Context
 
