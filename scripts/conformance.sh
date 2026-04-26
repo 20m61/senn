@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # SENN local conformance gate.
 #
-# Mirrors the static portion of .github/workflows/conformance.yml.
-# Authoritative — the project does not depend on GitHub Actions to
-# enforce its contract. CI on Actions is an optional convenience, not
-# the source of truth.
+# Authoritative — the project does not depend on GitHub Actions or any
+# other CI vendor to enforce its contract. The repository ships no
+# `.github/workflows/` (see ADR-0021 + ADR-0022). A fork MAY add a CI
+# vendor mirror if it wants one, but MUST keep the mirror aligned with
+# this script and never treat the mirror as authoritative.
 #
 # Skipped here (run on demand):
 #   - Playwright e2e (slow; ~25min per browser).

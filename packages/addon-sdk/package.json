@@ -29,8 +29,7 @@
     "test": "echo \"no tests yet\""
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "dependencies": {
     "@senn/protocol": "workspace:*"

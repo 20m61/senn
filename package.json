@@ -39,7 +39,8 @@
     "build:addon-sdk": "tsx scripts/build-addon-sdk.ts",
     "build:web-registry": "tsx scripts/build-web-registry.ts",
     "stage:gallery-pages": "tsx scripts/stage-gallery-pages.ts",
-    "verify:http-poll-endpoint": "tsx scripts/verify-http-poll-endpoint.ts"
+    "verify:http-poll-endpoint": "tsx scripts/verify-http-poll-endpoint.ts",
+    "release:addon-sdk": "bash scripts/publish-addon-sdk.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",

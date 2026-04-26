@@ -78,21 +78,26 @@ Each add-on under `addons/official/*` releases independently with its own
 SemVer. The release process is the same pre-flight + manifest validator,
 but no workspace-wide version bump is involved.
 
-## `@senn/addon-sdk` releases (ADR-0019)
+## `@senn/addon-sdk` releases (ADR-0019 + ADR-0022)
 
 The SDK publishes to public npm under the `@senn` scope on its own
 cadence, independent of the host-application release train. Tag namespace
 is `addon-sdk-v<semver>` so future publishable packages can co-exist.
 
+ADR-0022 supersedes ADR-0019 §5: the publish flow runs **locally** from a
+maintainer machine, not from a CI vendor. The maintainer is the trust
+boundary; their npm account, npm 2FA prompt, and `~/.npmrc` are the
+only credentials in play.
+
 ### Pre-publish checklist
 
 - `packages/addon-sdk/package.json#private` is `false` (or the field is
-  removed). The first release MUST flip this; CI rejects a tagged build
-  that still has `private: true`.
+  removed). The first release MUST flip this; the publish script rejects
+  a tagged build that still has `private: true`.
 - Version bump landed on `develop` then merged to `main` in the same PR
   that adds the surface change.
-- `pnpm verify:addon-sdk` passes locally (CI runs it again on tag
-  push). Both ADR-0018 shape and ADR-0019 §6 guards are checked.
+- `pnpm conformance` passes locally on the tagged commit. The publish
+  script re-runs it, so a stale checkout cannot publish.
 - `npm whoami` shows an account that owns `@senn/addon-sdk` on npmjs.com,
   with 2FA enabled.
 
@@ -104,38 +109,58 @@ After the version-bump PR merges to `main`:
 git switch main
 git pull --ff-only
 git tag -a "addon-sdk-v0.1.0" -m "@senn/addon-sdk 0.1.0"
+git checkout "addon-sdk-v0.1.0"
+
+# This runs the local publish gate end-to-end:
+#   1. refuse if working tree is dirty
+#   2. refuse if HEAD is not on the named tag
+#   3. assert package.json#version matches the tag
+#   4. assert private:true is removed
+#   5. pnpm install --frozen-lockfile && pnpm conformance
+#   6. pnpm pack and verify the tarball is non-empty
+#   7. confirm with the operator before invoking npm publish
+#   8. pnpm publish --tag <dist-tag> --access public --no-git-checks
+pnpm release:addon-sdk addon-sdk-v0.1.0
+
+# After successful publish, push the tag for archival reference.
 git push origin "addon-sdk-v0.1.0"
 ```
 
-The tag push triggers `.github/workflows/publish-addon-sdk.yml`, which:
-
-1. checks out the tagged ref,
-2. asserts `packages/addon-sdk/package.json#version` matches the tag,
-3. runs `pnpm typecheck`, `pnpm verify:addon-sdk`, `pnpm lint`, `pnpm test`,
-4. `pnpm pack`s the package and prints the tarball contents,
-5. runs `pnpm publish --no-git-checks` with `provenance: true` (set in
-   `publishConfig`), using `secrets.NPM_TOKEN`.
-
-The workflow has `id-token: write` so npm provenance can mint a Sigstore
-certificate attesting the tarball came from this workflow run.
+The publish script (`scripts/publish-addon-sdk.sh`) is vendor-neutral:
+it depends only on `bash`, `git`, `node`, `pnpm`, and the npm CLI. It
+does not require GitHub Actions, OIDC, or any CI runner.
 
 ### Pre-releases
 
 Pre-release versions (e.g., `0.2.0-rc.1`) MUST publish under the npm
-`next` dist-tag, not `latest`. To do so manually after a successful CI
-build, override the tag with:
+`next` dist-tag, not `latest`. Pass the dist-tag as the second argument:
 
 ```sh
-pnpm --filter @senn/addon-sdk publish --tag next --no-git-checks
+pnpm release:addon-sdk addon-sdk-v0.2.0-rc.1 next
 ```
-
-For now this is a one-off command; if pre-releases become routine, fold
-the dist-tag selection into the workflow.
 
 ### Hotfix
 
 A patch version (`0.1.0 → 0.1.1`) follows the same path. There is no
-separate hotfix branch; bump on `develop`, PR to `main`, tag.
+separate hotfix branch; bump on `develop`, PR to `main`, tag, run
+`pnpm release:addon-sdk addon-sdk-v0.1.1`.
+
+### npm provenance
+
+The local publish flow does **not** mint an npm provenance attestation
+(provenance requires a CI runner with OIDC, which would re-introduce a
+vendor dependency). The integrity claim that survives instead is:
+
+- the git tag is annotated and `git tag -v` MUST verify against a
+  maintainer's signed commit history;
+- the published tarball MUST be reproducible by anyone running
+  `pnpm release:addon-sdk <tag>` from a clean checkout of the same tag;
+- every add-on that ships the runtime byte-equally
+  (`pnpm verify:addon-sdk`) provides a second integrity surface via
+  ADR-0008 manifest signatures.
+
+This is a deliberate ADR-0022 trade: trust the maintainer + git +
+manifest-signing, instead of trust the CI vendor.
 
 ### Rollback
 

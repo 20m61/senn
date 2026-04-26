@@ -2,10 +2,13 @@
 
 ## Status
 
-Accepted (2026-04-26). Implementation landed in commit `bb7baeb`
-(local-first conformance gate; pre-push hook + `pnpm conformance` +
-optional Actions mirror). `pnpm conformance` is the contract;
-`.github/workflows/` are optional mirrors.
+Implemented (2026-04-26, hardened 2026-04-27). Initial implementation
+landed in commit `bb7baeb` with `.github/workflows/` retained as an
+optional mirror. Subsequently hardened by ADR-0022 — every CI vendor
+config has been removed from the repo, so this ADR's "no dependency on
+Actions" stance is now structural rather than aspirational. The
+contract is `pnpm conformance` (`scripts/conformance.sh`) plus the
+`.githooks/pre-push` hook.
 
 ## Context
 
@@ -40,8 +43,9 @@ same logic extends to the whole repository: the monorepo is conformant when
 ## Decision
 
 SENN's conformance contract is enforced locally by `pnpm conformance` plus a
-pre-push git hook; GitHub Actions workflows are an OPTIONAL mirror, not the
-authority.
+pre-push git hook. CI vendor workflows MAY be added by a fork as a *mirror*,
+but the repository itself does not ship any — see ADR-0022 for the publish
+side of the same stance.
 
 Specifically:
 
@@ -68,10 +72,13 @@ Specifically:
    `main`-push guard — that check is also enforced server-side by branch
    protection.
 
-5. **`.github/workflows/conformance.yml` and `publish-addon-sdk.yml`** are
-   retained and MUST be kept aligned with `scripts/conformance.sh`, but they
-   are annotated as optional mirrors. A fork without Actions MUST be treated as
-   fully capable of producing a conformant release.
+5. **No CI vendor configuration ships in the repository.** As of
+   ADR-0022, `.github/workflows/` and any equivalent vendor-specific CI
+   directory MUST NOT be added to the canonical repo. A fork that wants
+   to mirror the gate on a CI vendor MAY add such configuration in the
+   fork only, kept aligned with `scripts/conformance.sh`. A fork
+   without any CI MUST be treated as fully capable of producing a
+   conformant release.
 
 6. **Playwright e2e tests** are explicitly NOT part of `pnpm conformance`.
    Their per-browser cost (~25 minutes each) makes them unsuitable for the
@@ -118,9 +125,9 @@ protection is misconfigured or when a developer uses a PAT that bypasses it.
 - New contributors MUST run `pnpm install` for the hook to be active. A
   contributor who skips install and pushes directly will not have the hook wired
   until they do so.
-- Keeping `scripts/conformance.sh` and `.github/workflows/conformance.yml` in
-  sync is an ongoing maintenance obligation. Drift between the two produces the
-  very "environment skew" this ADR aims to eliminate.
+- (Originally listed: keeping `scripts/conformance.sh` and the GitHub Actions
+  mirror in sync. Removed by ADR-0022 — the mirror is no longer shipped from
+  the canonical repo, so this maintenance obligation no longer applies.)
 
 ### Neutral / follow-up
 
@@ -137,10 +144,11 @@ protection is misconfigured or when a developer uses a PAT that bypasses it.
 
 **Reversibility:** This decision is easily reversible. Removing
 `scripts/conformance.sh`, the `prepare` and `conformance` entries from the root
-`package.json`, and `.githooks/pre-push` restores the pre-ADR state. The
-`.github/workflows/` files remain functional throughout, so a fork that prefers
-CI-as-authority can revert this ADR and continue using Actions without any
-workflow changes. Cost of reversal: low.
+`package.json`, and `.githooks/pre-push` restores the pre-ADR state. A fork
+that wants CI-as-authority MAY add its own `.github/workflows/` (or the
+equivalent on a different forge) — the canonical repo no longer ships such
+files (see ADR-0022) but does not prevent forks from re-introducing them.
+Cost of reversal: low.
 
 ## Related
 
@@ -155,8 +163,11 @@ workflow changes. Cost of reversal: low.
   static host without a build server; conformance tooling follows the same
   constraint
 - Spec: `docs/dev/conformance.md` — the local gate page that this ADR's
-  implementation populates; §"CI (optional, not authoritative)" is the
-  normative statement derived from this ADR
+  implementation populates; the §"No CI vendor dependency" section is the
+  normative statement derived from this ADR (and ADR-0022)
+- ADR-0022: local-first publish pipeline — extends this ADR's stance from
+  the conformance gate to the release flow, and removes the optional Actions
+  mirror entirely
 
 ## Open questions for the maintainer
 
@@ -166,12 +177,10 @@ workflow changes. Cost of reversal: low.
    pushes where only `docs/**` files changed, at the cost of a more complex hook
    script? Or is a flat bypass (`SENN_SKIP_PREPUSH=1`) sufficient policy?
 
-2. **CI alignment enforcement.** This ADR requires `scripts/conformance.sh` and
-   `.github/workflows/conformance.yml` to be kept in sync but does not specify a
-   machine-enforceable check for that alignment. Should a drift check (e.g., a
-   step that diffs the workflow's step list against the shell script's sequence)
-   be added to `pnpm conformance` itself, or is a code-review obligation
-   sufficient?
+2. ~~**CI alignment enforcement.**~~ Resolved by ADR-0022: the canonical
+   repo no longer ships an Actions mirror, so there is nothing to keep in
+   sync. Forks that add their own CI mirror are responsible for their own
+   alignment policy.
 
 3. **Topic-branch lifecycle.** This ADR gates `git push`. Should `pnpm
    conformance` also be invoked automatically on `git commit` (via a pre-commit

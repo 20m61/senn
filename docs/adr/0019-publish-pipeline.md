@@ -2,13 +2,18 @@
 
 ## Status
 
-Accepted (2026-04-26). Tooling shipped — `.github/workflows/publish-addon-sdk.yml`
-(§5 release flow), `scripts/verify-addon-sdk.ts` (§6 version-bump and
-runtime byte-equality guards), runbook in `docs/dev/release.md`, and the
-install section in `docs/dev/writing-an-addon.md`. Initial publish is
-pending operational prerequisites only: npm `@senn` scope, `NPM_TOKEN`
-secret on the repository, and the `private:true` flip + `version: 0.1.0`
-bump on `packages/addon-sdk/package.json`.
+Accepted (2026-04-26). §1 (publishable scope), §2 (npm scope and access),
+§3 (version policy), §4 (no separate runtime signature; rely on
+manifest-signing instead — see ADR-0022 §"npm provenance" for the
+revised integrity story), §6 (regression guards), and §7 (deferred
+items) remain authoritative. **§5 (release flow) is superseded by
+ADR-0022**, which moves the publish runner from a GitHub Actions
+workflow to the local `pnpm release:addon-sdk <tag>` script
+(`scripts/publish-addon-sdk.sh`). Initial publish is pending
+operational prerequisites only: npm `@senn` scope, npm 2FA on the
+maintainer account, and the `private:true` flip + `version: 0.1.0`
+bump on `packages/addon-sdk/package.json`. The `NPM_TOKEN` secret on
+the repository is no longer required (was Actions-specific).
 
 ## Context
 
