@@ -2,16 +2,17 @@
 
 ## Status
 
-Accepted.
-
-Validators ship in `scripts/lib/registry-schema.ts` (covered by
-`pnpm test:registry-schema`); the addon-gallery renders v3 fields
-(`audit` badge, `history` details, meta-index `endorsedBy` chips); the
-official registry uses v3 (`addons/official/index.json` v=3, with a
-self-attestation `audit` block on `dev.senn.whiteboard` as the
-worked example). The submissions surface (§2) is validator-only —
-the gallery does not render it yet because no publisher ships
-`submissions/index.json` today.
+Implemented (2026-04-26). Schema accepted in this ADR; implementation
+landed across commits `38db86d` (validators), `7a1229e` (registry
+bump to v3), `f1ef3b4` (gallery v3 surface), and `ab5084b` (audit
+backfill + submissions validators + Pages deploy). Validators ship in
+`scripts/lib/registry-schema.ts` (covered by `pnpm test:registry-schema`);
+the addon-gallery renders v3 fields (`audit` badge, `history` details,
+meta-index `endorsedBy` chips); the official registry uses v3
+(`addons/official/index.json` v=3, with a self-attestation `audit` block
+on `dev.senn.whiteboard` as the worked example). The submissions surface
+(§2) is validator-only — the gallery does not render it yet because no
+publisher ships `submissions/index.json` today.
 
 ## Context
 
@@ -388,9 +389,6 @@ include the new optional fields when present. Specifically:
 
 ### Out of scope
 
-- Implementation of v3 in any package. This ADR is design-only; a
-  follow-up will own the validator, the gallery UI, and the
-  `addons/official/index.json` migration.
 - A "submissions" UI in `apps/addon-gallery`. The current gallery
   loads only `index.json`; submissions are a separate pane that a
   follow-up adds when at least one publisher actually ships

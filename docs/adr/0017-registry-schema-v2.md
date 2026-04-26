@@ -2,10 +2,12 @@
 
 ## Status
 
-Accepted (design only; implementation lands as a follow-up — schema
-extensions to `addons/official/index.json`, validator updates in
-`scripts/verify-official-addons.ts`, and gallery filter UI in
-`apps/addon-gallery/`).
+Implemented (2026-04-26). Schema v2 shipped as `addons/official/index.json`
+(now bumped to v3 by ADR-0020), the publisher meta-index
+`addons/official/meta.json`, the registry validators under `scripts/`,
+and the categorisation / deprecation surface in `apps/addon-gallery/`.
+ADR-0020 supersedes v2 fields with an additive v3 (history, submissions,
+audits); the v2 contract remains the floor that v3 extends.
 
 ## Context
 

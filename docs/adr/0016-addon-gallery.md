@@ -2,8 +2,10 @@
 
 ## Status
 
-Accepted (design only; implementation lands as `apps/addon-gallery`
-under task D following this ADR).
+Implemented (2026-04-26). Design accepted in this ADR; implementation
+shipped as `apps/addon-gallery/` (Vite app + Playwright e2e on
+chromium / firefox / webkit). The gallery renders the ADR-0017 v2
+surface and the ADR-0020 v3 surface (history, audits, submissions).
 
 ## Context
 
