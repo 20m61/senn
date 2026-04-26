@@ -156,12 +156,25 @@ A session that:
 ## Conformance
 
 ```sh
-pnpm --filter @senn/web e2e   # Playwright drives a real RTCPeerConnection round-trip
+pnpm --filter @senn/core test    # Vitest — spec checklist against fakes
+pnpm --filter @senn/web e2e      # Playwright drives a real RTCPeerConnection round-trip
 ```
 
-Vitest unit tests for `PeerSession` are deferred until a Node-side
-`RTCPeerConnection` shim is wired in. Until then, the Playwright e2e is
-the conformance harness; CI MUST run it.
+Two harnesses, by design:
+
+- **Vitest (`packages/core/test/peer-session.test.ts`)** asserts every
+  normative MUST in this spec — DataChannel labels, state-machine
+  transitions, `sendText` bounds, idempotent `close`, signaling
+  validation (`from`/`to` filtering), peer-initiated `bye` — against
+  in-process fakes. Cheap, deterministic, runs in
+  `pnpm conformance`.
+- **Playwright e2e** drives the same flows against a real
+  `RTCPeerConnection` in three browsers, catching browser-stack
+  regressions the fakes cannot model. Slow (~25 min per browser);
+  on-demand only.
+
+The two together are the conformance harness for `PeerSession`; both
+MUST stay green before a PR merges to `develop`.
 
 ## Cross-references
 
