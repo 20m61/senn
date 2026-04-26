@@ -31,6 +31,8 @@
     "verify:manifest": "tsx scripts/verify-manifest.ts",
     "verify:official": "tsx scripts/verify-official-addons.ts",
     "verify:addon-sdk": "tsx scripts/verify-addon-sdk.ts",
+    "validate:registry": "tsx scripts/validate-registry.ts",
+    "test:registry-schema": "tsx --test scripts/test-registry-schema.ts",
     "sign:all-official": "tsx scripts/sign-all-official.ts",
     "build:addon-sdk": "tsx scripts/build-addon-sdk.ts",
     "build:web-registry": "tsx scripts/build-web-registry.ts",

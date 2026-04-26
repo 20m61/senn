@@ -51,6 +51,12 @@ jobs:
       - name: Verify official add-on registry signatures
         run: pnpm verify:official
 
+      - name: Test registry schema validators (ADR-0017 v2 + ADR-0020 v3)
+        run: pnpm test:registry-schema
+
+      - name: Schema-only re-validate of the official index (defence in depth)
+        run: pnpm validate:registry addons/official/index.json
+
       - name: Verify @senn/addon-sdk package shape (ADR-0018 + ADR-0019)
         # SENN_VERIFY_SDK_OFFLINE=1 makes the ADR-0019 §6a npm probe a
         # no-op on push/PR runs. The publish-addon-sdk.yml workflow is
