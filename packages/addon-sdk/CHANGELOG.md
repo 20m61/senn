@@ -48,13 +48,10 @@ pnpm add -D @senn/addon-sdk
 npm install --save-dev @senn/addon-sdk
 ```
 
-### Conformance at release time
+### Release procedure
 
-- `pnpm conformance` (typecheck → lint → all manifest validators →
-  forbidden-API grep → official signature verifier →
-  http-poll endpoint self-test → registry schema → addon-sdk shape
-  guard → drift checks → workspace tests) was green on the
-  `addon-sdk-v0.1.0` tag.
-- The `pnpm release:addon-sdk addon-sdk-v0.1.0` runner re-ran the
-  full gate from a clean checkout before invoking `npm publish`
-  per ADR-0022 §2.
+This release follows the gate sequence defined in
+[`docs/dev/release.md`](../../docs/dev/release.md): `pnpm conformance`
+on the tagged commit, then `pnpm release:addon-sdk addon-sdk-v0.1.0`
+re-runs the same gate from a clean checkout before invoking
+`npm publish` (ADR-0022 §2).
