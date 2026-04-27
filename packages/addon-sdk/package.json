@@ -1,7 +1,6 @@
 {
   "name": "@senn/addon-sdk",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Developer SDK for building static SENN add-ons.",
   "license": "Apache-2.0",
   "homepage": "https://github.com/20m61/senn/tree/develop/packages/addon-sdk",
@@ -30,8 +29,5 @@
   },
   "publishConfig": {
     "access": "public"
-  },
-  "dependencies": {
-    "@senn/protocol": "workspace:*"
   }
 }
