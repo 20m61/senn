@@ -9,7 +9,7 @@
  * Spec: docs/addon-sdk-spec.md.  Bridge protocol: docs/addon-runtime-spec.md.
  */
 
-export const SENN_ADDON_SDK_VERSION = "0.0.0";
+export const SENN_ADDON_SDK_VERSION = "0.1.0";
 
 export interface SennAddonContext {
   readonly addonId: string;
