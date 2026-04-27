@@ -7,7 +7,7 @@
   "homepage": "https://github.com/20m61/senn",
   "repository": {
     "type": "git",
-    "url": "https://github.com/20m61/senn.git"
+    "url": "git+https://github.com/20m61/senn.git"
   },
   "engines": {
     "node": ">=22",

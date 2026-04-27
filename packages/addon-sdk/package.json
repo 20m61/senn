@@ -6,7 +6,7 @@
   "homepage": "https://github.com/20m61/senn/tree/develop/packages/addon-sdk",
   "repository": {
     "type": "git",
-    "url": "https://github.com/20m61/senn.git",
+    "url": "git+https://github.com/20m61/senn.git",
     "directory": "packages/addon-sdk"
   },
   "type": "module",
