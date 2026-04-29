@@ -26,6 +26,39 @@ A maintainer who has been inactive for 12 months, or who repeatedly violates
 the [Code of Conduct](../CODE_OF_CONDUCT.md), may be removed by majority vote
 of the remaining maintainers.
 
+## Release signing identities (ADR-0023)
+
+`@senn/addon-sdk` releases MAY ship a vendor-neutral provenance
+artefact alongside the npm tarball. The integrity surface is opt-in
+per [ADR-0023](adr/0023-vendor-neutral-provenance.md) §4 and is
+toggled at publish time by `SENN_SIGN_RELEASE` in
+`scripts/publish-addon-sdk.sh`.
+
+When this surface is active, the maintainer's signing identity is
+listed below. A downstream verifier MUST cross-check the
+`senn-addon-sdk-<version>.tgz.cert` published on the GitHub Release
+for `addon-sdk-v<version>` against the row corresponding to the
+release window. The `.cert` slot's content depends on the tool:
+
+- `cosign` — Sigstore certificate (PEM).
+- `minisign` — maintainer public key reference (`*.pub` file).
+- `gpg` — ASCII-armoured public key block.
+
+| Tool | Identity / fingerprint | Active from | Active until | Notes |
+|------|------------------------|-------------|--------------|-------|
+| _none yet_ | _no signed release has shipped_ | _n/a_ | _n/a_ | Add a row in the same commit that activates the toolchain for the first signed release. |
+
+Rotation follows the [ADR-0010](adr/0010-key-rotation.md) pattern
+applied to the chosen tool: announce the new identity in this table
+**before** the first release that uses it, leave the previous row's
+"Active until" empty until the rotation release lands, then close
+the previous row.
+
+A maintainer who signs releases MUST also list the corresponding
+custody location for the signing material in the Holders table
+above (or in a parallel "Release-signing keys" subsection if the
+custody differs from the manifest-signing keystore).
+
 ## Changes to Governance
 
 Changes to this document, [GOVERNANCE.md](../GOVERNANCE.md), the

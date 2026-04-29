@@ -250,6 +250,30 @@ the trust surface is uniform across all `@senn` packages.
   the cosign / minisign / gpg verify commands.
 - `docs/adr/README.md`: index row added for ADR-0023.
 
+## Implementation status
+
+§4's opt-in scaffold ships in the publish script and the release
+docs (no ADR amendment needed — the ADR explicitly framed this as
+a "MAY land in a follow-up"):
+
+- `scripts/publish-addon-sdk.sh` reads `SENN_SIGN_RELEASE`,
+  `SENN_SIGN_KEY`, and (for minisign) `SENN_SIGN_PUBKEY`. When unset
+  the publish flow is byte-identical to ADR-0022. When set it stages
+  `senn-addon-sdk-<v>.tgz`, `.sig`, `.cert` under `dist/release/`
+  for manual upload to the GitHub Release.
+- `docs/dev/release.md` documents the env contract under "Vendor-
+  neutral provenance (ADR-0023, opt-in)".
+- `docs/governance.md` ships a "Release signing identities" table
+  with one placeholder row pending the maintainer's first signed
+  release; activation requires committing the chosen tool and
+  fingerprint into that table in the same commit that runs the
+  first signed release.
+
+The ADR stays Proposed until the maintainer ships a signed release
+and demonstrates the verify path against the table — at that point
+a follow-up commit transitions Status to Accepted (per the SENN
+governance policy that Status changes are maintainer-only).
+
 ## Related
 
 - ADR-0007: vendor-neutral signaling and relay — same principle

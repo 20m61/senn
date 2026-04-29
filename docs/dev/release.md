@@ -162,6 +162,42 @@ vendor dependency). The integrity claim that survives instead is:
 This is a deliberate ADR-0022 trade: trust the maintainer + git +
 manifest-signing, instead of trust the CI vendor.
 
+### Vendor-neutral provenance (ADR-0023, opt-in)
+
+A third integrity surface is **opt-in per release**: a detached
+maintainer signature over the exact tarball bytes, published to the
+GitHub Release for the tag (not to npm). The publish script stages
+it under `dist/release/` (gitignored) when the maintainer toggles
+the env vars below; uploading the artefacts to the Release page is a
+manual step.
+
+Activate by exporting these before running `pnpm release:addon-sdk`:
+
+```sh
+export SENN_SIGN_RELEASE=cosign       # or: minisign | gpg
+export SENN_SIGN_KEY=/path/to/key     # cosign/minisign secret-key file,
+                                      # or gpg key id/fingerprint
+# minisign only — maintainer's public-key file, copied into .cert:
+export SENN_SIGN_PUBKEY=/path/to/minisign.pub
+```
+
+Output (after a successful `pnpm publish`):
+
+```
+dist/release/senn-addon-sdk-<v>.tgz       # bytes identical to npm
+dist/release/senn-addon-sdk-<v>.tgz.sig   # detached signature
+dist/release/senn-addon-sdk-<v>.tgz.cert  # tool-specific verification material
+```
+
+Then upload all three files to the GitHub Release for the matching
+`addon-sdk-v<v>` tag and confirm the signing identity against
+[`docs/governance.md` "Release signing identities"](../governance.md#release-signing-identities-adr-0023).
+
+If the env vars are unset, the script's behaviour is unchanged from
+ADR-0022: no signing tool is invoked, no extra files are written.
+Downstreams that did not opt into provenance verification still get
+the two integrity surfaces from the previous section.
+
 ### Rollback
 
 `npm` does not support unpublishing a published version after 72 hours.
