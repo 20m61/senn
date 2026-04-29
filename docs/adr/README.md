@@ -56,3 +56,4 @@ archaeology.
 | 0023 | [Vendor-neutral provenance for `@senn/addon-sdk` releases](0023-vendor-neutral-provenance.md) | Proposed |
 | 0024 | [Encrypted Nostr signaling content via NIP-44](0024-encrypted-nostr-signaling-nip44.md) | Proposed |
 | 0025 | [Default signing tool for ADR-0023 vendor-neutral provenance](0025-release-signing-tool-default.md) | Proposed |
+| 0026 | [Capability tag naming and v1 registry](0026-capability-tag-naming.md) | Proposed |
