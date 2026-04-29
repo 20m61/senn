@@ -34,8 +34,13 @@ deployment swaps in `NostrSignaling` for `HttpPollSignaling` or
 - Every published event MUST carry exactly one tag of the form
   `["t", "senn:<roomId>"]`. Additional tags are permitted but
   servers MUST tolerate adapters that ship none.
-- Every published event's `content` MUST be the UTF-8 JSON encoding
-  of a `SignalingMessage` (the same shape used by other adapters).
+- In v1 (default) mode, every published event's `content` MUST be the
+  UTF-8 JSON encoding of a `SignalingMessage` (the same shape used by
+  other adapters). In v2 mode (§"v2 content cipher (NIP-44, OPTIONAL)"),
+  this MUST is replaced by the v2 normative checklist's `content`
+  rule (base64 NIP-44 v2 ciphertext envelope whose plaintext is
+  `UTF-8("nv44") || UTF-8(JSON.stringify(SignalingMessage))`); the v2
+  rule supersedes this clause for v2-enabled senders only.
 - Subscribers MUST `REQ` with the filter
   `{ kinds: [25556], "#t": [\`senn:${roomId}\`] }`. They MAY add a
   `since` timestamp to skip backfill on reconnect.
