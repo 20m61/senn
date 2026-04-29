@@ -142,8 +142,13 @@ relay-opaque — no new tag, no new `kind`, no relay-specific extension.
   unchanged from v1.
 - A v2-capable receiver MUST follow this ordered logic on every
   inbound kind-25556 event whose `t` tag matches the current room:
-  1. Derive `encryption_key` from the room tag (`senn:<roomId>`)
-     per the formula above.
+  1. Parse the bare `<roomId>` (the 26-char Crockford base32 segment
+     after the `senn:` prefix) out of the matched `t` tag, and use
+     **that bare `<roomId>`** — not the full `senn:<roomId>` tag
+     value — as the `ikm` argument to the §"Normative checklist
+     (v2)" HKDF formula. Including the `senn:` prefix in `ikm`
+     produces a different key from a peer that follows the formula
+     and breaks v2 decryption deterministically.
   2. Attempt NIP-44 v2 decryption of `content` using `encryption_key`.
   3. If decryption succeeds AND the plaintext begins with the
      `nv44` sentinel, strip the sentinel and JSON-parse the
@@ -231,6 +236,12 @@ version is end-to-end and relay-opaque.
   instead of the bare 26-char Crockford base32 `roomId` —
   non-conformant; only the `roomId` is permitted as `ikm` per the
   §"Normative checklist (v2)" formula.
+- Passing the full `senn:<roomId>` tag value to HKDF as `ikm` (i.e.,
+  `ikm = UTF-8("senn:<roomId>")`) instead of stripping the `senn:`
+  prefix first — non-conformant; the §"Receive path" step 1 and
+  the §"Normative checklist (v2)" formula both pin `ikm` to the bare
+  `<roomId>`. This failure deterministically breaks v2 decryption
+  between the affected peer and conformant peers in the same room.
 - Substituting different `salt` or `info` strings in the HKDF
   derivation (e.g., empty `salt`, or `info = "senn:nostr:v2"`) —
   non-conformant; the four parameters in §"Normative checklist (v2)"

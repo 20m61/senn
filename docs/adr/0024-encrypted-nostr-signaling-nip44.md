@@ -138,8 +138,12 @@ enabled, the adapter MUST default to v1 plaintext behaviour (ADR-0014).
 A receiver MUST follow this ordered logic on every inbound kind-25556 event
 whose `t` tag matches the current room:
 
-1. Derive `encryption_key` from the event's room tag (`senn:<roomId>`) using
-   the §2 derivation.
+1. Parse the bare `<roomId>` out of the matched `t` tag (the 26-char
+   Crockford base32 segment after the `senn:` prefix) and apply the §2
+   derivation with `ikm = UTF-8(<roomId>)` — never `ikm =
+   UTF-8("senn:<roomId>")`. Including the prefix in `ikm` produces a
+   different key from a peer that follows §2 and breaks v2 decryption
+   deterministically.
 2. Attempt NIP-44 v2 decryption of `content` using `encryption_key`.
 3. If decryption succeeds and the plaintext begins with `nv44`, strip the
    prefix and JSON-parse the remainder as a `SignalingMessage`. This is the
