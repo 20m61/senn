@@ -162,24 +162,34 @@ Add-on `index.html` then loads it as a classic script:
 <script src="addon.js"></script>
 ```
 
-`@senn/addon-sdk` is currently a workspace package (not yet published to
-npm); inside this repo you depend on it via `"@senn/addon-sdk":
-"workspace:*"`. ADR-0019 owns the public publish flow.
+`@senn/addon-sdk` is **prepared for npm publish at version 0.1.0** but
+is **not yet on the public registry**. Inside this repo you depend on it
+via `"@senn/addon-sdk": "workspace:*"`. ADR-0019 owns the public publish
+flow; ADR-0022 governs the local-first publish runner that produces the
+tarball when the registry side is ready.
+
+> **Why pre-publish?** As of 2026-04-29 the `@senn` org is still being
+> provisioned on npm (anti-fraud hold for new maintainer accounts).
+> Once the scope is granted, `pnpm release:addon-sdk addon-sdk-v0.1.0`
+> ships the tarball that the steps below already produce locally — the
+> bytes are byte-identical, so your `pnpm pack`-based install path
+> survives the registry transition unchanged.
 
 ### Trying the SDK from an external project (pre-publish)
 
-Until `@senn/addon-sdk` ships to npm under the `@senn` scope (ADR-0019),
-external authors can still depend on the exact same artefacts via
-`pnpm pack`. This produces a tarball that mirrors what the future
-`pnpm publish` will produce, so the install path you exercise today is
-the install path users will run after publish — no rewrite needed.
+Until `@senn/addon-sdk` ships to npm under the `@senn` scope (ADR-0019
++ ADR-0022), external authors can still depend on the exact same
+artefacts via `pnpm pack`. This produces a tarball that mirrors what
+the future `pnpm publish` will produce, so the install path you
+exercise today is the install path users will run after publish — no
+rewrite needed.
 
 From a clone of `20m61/senn`:
 
 ```sh
 pnpm install
 pnpm --filter @senn/addon-sdk build           # populates dist/
-pnpm --filter @senn/addon-sdk pack             # writes senn-addon-sdk-0.0.0.tgz
+pnpm --filter @senn/addon-sdk pack            # writes senn-addon-sdk-0.1.0.tgz
 ```
 
 `pnpm pack` honours the `files` field documented in ADR-0018 §2, so the
@@ -187,7 +197,7 @@ tarball contains `dist/`, `runtime/`, `src/`, and `package.json`. Verify
 it does:
 
 ```sh
-tar -tzf packages/addon-sdk/senn-addon-sdk-0.0.0.tgz | sort
+tar -tzf packages/addon-sdk/senn-addon-sdk-0.1.0.tgz | sort
 # package/LICENSE
 # package/dist/index.d.ts
 # package/dist/index.d.ts.map
@@ -203,9 +213,9 @@ In your external add-on project, install the tarball directly:
 
 ```sh
 cd path/to/your-addon
-pnpm add -D /absolute/path/to/senn-addon-sdk-0.0.0.tgz
+pnpm add -D /absolute/path/to/senn-addon-sdk-0.1.0.tgz
 # or, if you prefer not to copy the path:
-pnpm add -D file:../senn/packages/addon-sdk/senn-addon-sdk-0.0.0.tgz
+pnpm add -D file:../senn/packages/addon-sdk/senn-addon-sdk-0.1.0.tgz
 ```
 
 The TypeScript and runtime-copy snippets above work unchanged: the
