@@ -2,7 +2,12 @@
 
 ## Status
 
-Proposed (2026-04-29)
+Accepted (2026-04-29). The wire shape (NIP-44 v2 cipher, room-key
+derivation, sentinel prefix, v1 fallback) is final. Implementation in
+`@senn/signaling-nostr` and the matching update to
+`docs/signaling-nostr-spec.md` ship in a follow-up PR; Status moves to
+Implemented once both are on `develop` and `pnpm verify:nostr-self-test`
+covers the new MUST clauses (§8).
 
 ## Context
 
