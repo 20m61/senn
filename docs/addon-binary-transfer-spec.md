@@ -71,7 +71,9 @@ interface AddonSendBinRequest {
   readonly kind: "senn.addon.v1";
   readonly op: "send-bin";
   readonly mime: string;          // informative; e.g. "application/octet-stream"
-  readonly bytes: Uint8Array;     // ≤ 65_536 bytes
+  readonly bytes: Uint8Array;     // ≤ 4 MiB per logical message; the host
+                                  // chunks transparently into ≤ 64 KiB
+                                  // wire frames (ADR-0012)
 }
 
 // Host → add-on iframe
@@ -142,7 +144,18 @@ delivery.
 
 - An add-on without `peer.send.bin` calling `send-bin` —
   **rejected** with `permission-denied`.
-- A 70 KiB body — **rejected** with `payload-too-large`.
+- A 70 KiB body — **accepted**; the host splits it into two frames
+  on `core.bin` (one ≤ 64 KiB header-bearing frame plus one
+  continuation frame) and the receiver reassembles into a single
+  `deliver-bin` event. Per-frame, not per-message, is what the
+  64 KiB budget gates.
+- A 5 MiB body — **rejected** with `payload-too-large` (exceeds the
+  4 MiB per-message cap from ADR-0012).
+- A receiver that buffers more than 16 MiB of in-flight reassembly
+  state — drops the offending message with `reassembly-overflow`.
+- A receiver that has not seen all frames of a message within 60 s
+  of the first frame — drops the offending message with
+  `reassembly-timeout`.
 - Sending text on `core.bin` — undefined behaviour; spec implementations
   drop the frame.
 - Receiver finds `header.size !== body.byteLength` — frame **dropped**

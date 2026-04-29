@@ -17,6 +17,16 @@ and permission-checked here.
 
 ## Normative checklist
 
+- When the host's verify mode is `optional` or `required`
+  ([ADR-0008](adr/0008-manifest-signing.md) §6;
+  [addon-signing-spec.md](addon-signing-spec.md)), the host MUST run
+  detached signature verification against `manifest.sig.json` **before**
+  the schema validation step below and **before** mounting the iframe.
+  In `required` mode, a missing or invalid signature MUST abort the
+  load. In `optional` mode, a missing signature MUST proceed but the
+  host SHOULD surface a UI badge; an *invalid* signature (well-formed
+  `manifest.sig.json` whose signature does not verify against any
+  registry-pinned key) MUST abort the load.
 - The host MUST validate the manifest (per [addon-manifest.md](addon-manifest.md))
   before mounting the iframe. A failed manifest MUST abort the load.
 - The iframe MUST be created with `sandbox="allow-scripts"` and no other
@@ -42,7 +52,10 @@ and permission-checked here.
 
 ## Bridge protocol
 
-All host ↔ iframe messages are JSON objects with this shape:
+All host ↔ iframe messages are JSON objects whose `kind` is
+`"senn.addon.v1"`. The core text-message ops are defined here; binary,
+storage, and media ops extend the same envelope and are normatively
+defined in their sibling specs (see *Bridge extensions* below).
 
 ```ts
 type AddonBridgeMessage =
@@ -65,6 +78,26 @@ type AddonBridgeMessage =
   either from a peer or from a local source). Requires `peer.receive`
   on the add-on side.
 - `error` is the iframe reporting a non-fatal error to the host.
+
+### Bridge extensions
+
+The `kind: "senn.addon.v1"` envelope is shared across multiple normative
+op groups. A conformant host implementation MUST honour all groups whose
+permissions appear in the loaded add-on's manifest. Unknown ops MUST be
+dropped per the *Normative checklist*.
+
+| Group | Ops | Permission gate | Normative spec |
+|-------|-----|-----------------|----------------|
+| Text peer | `send`, `deliver`, `error` | `peer.send`, `peer.receive` | this spec |
+| Binary peer | `send-bin`, `deliver-bin` | `peer.send.bin`, `peer.receive.bin` | [addon-binary-transfer-spec.md](addon-binary-transfer-spec.md) |
+| Storage | `storage.local.read`, `storage.local.write` and their replies | `storage.local.read`, `storage.local.write` | [addon-storage-spec.md](addon-storage-spec.md) |
+| Media | `media.send.{audio,video}.{start,stop}`, `media.receive.{audio,video}.subscribe`, `media.receive.unsubscribe`, `media.element.create`, `media.element.created`, `media.track`, `media.level` | `media.send.{audio,video}`, `media.receive.{audio,video}` | [addon-media-spec.md](addon-media-spec.md) |
+| Audio level | `audio.level` | `audio.level` | [addon-audio-level-spec.md](addon-audio-level-spec.md) |
+
+The `error` op is shared across all groups. Each sibling spec defines
+the additional `code` values its group MAY surface; a host MUST NOT
+emit a code outside the union of values defined across the siblings
+loaded for the add-on.
 
 ## Wire envelope (peer → peer)
 
@@ -130,6 +163,11 @@ A host implementation that:
 - Forwards `op: "send"` without checking `manifest.permissions` — **rejected**.
 - Logs `payload` contents — **rejected**.
 - Mounts before `validateManifestFile()` resolves — **rejected**.
+- In `required` verify mode, mounts an iframe whose `manifest.sig.json`
+  is missing or fails verification — **rejected** (ADR-0008 §6).
+- Runs schema validation before signature verification when verify
+  mode is `optional` or `required` — **rejected**; signature
+  verification is the first gate.
 
 ## Conformance
 
@@ -148,5 +186,11 @@ that the host rejects `send` calls when the manifest does not declare
 
 - [addon-spec.md](addon-spec.md) — what an add-on may do.
 - [addon-manifest.md](addon-manifest.md) — manifest schema (the source of permissions).
+- [addon-signing-spec.md](addon-signing-spec.md) — detached `manifest.sig.json` wire format.
+- [ADR-0008](adr/0008-manifest-signing.md) — manifest signing and the three host-selectable verify modes.
 - [security-model.md](security-model.md) — trust boundaries.
-- [peer-session-spec.md](peer-session-spec.md) — `core.text` carries the envelope.
+- [peer-session-spec.md](peer-session-spec.md) — `core.text` carries the envelope; `core.bin` carries `send-bin`/`deliver-bin`.
+- [addon-binary-transfer-spec.md](addon-binary-transfer-spec.md) — binary peer ops.
+- [addon-storage-spec.md](addon-storage-spec.md) — storage ops.
+- [addon-media-spec.md](addon-media-spec.md) — cross-peer media ops.
+- [addon-audio-level-spec.md](addon-audio-level-spec.md) — host-derived audio level ops.

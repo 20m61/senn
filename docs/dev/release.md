@@ -211,6 +211,135 @@ This keeps the tarball resolvable (so existing lockfiles still install)
 but warns new consumers. Hard removal is not in the trust model — yanking
 goes via the registry, not via the SDK.
 
+### Troubleshooting (publish-time pitfalls captured during 0.1.0 prep)
+
+The first publish surfaced several gotchas worth recording so future
+maintainers — or anyone setting up `@senn/addon-sdk` from a fresh
+maintainer machine — do not have to rediscover them.
+
+#### `npm login` fails on WSL2 with `sensible-browser` error
+
+```
+npm error command sh -c sensible-browser '...'
+npm error code 1
+```
+
+Cause: npm v9+ defaults to `auth-type=web`. WSL2 has no
+`sensible-browser`. Setting `BROWSER=...` does NOT help — npm v11
+ignores the env var. Setting `npm config set browser /mnt/c/...` does
+NOT help either (a known npm v11 regression: the config value is not
+passed through to the spawn).
+
+Fix: switch to legacy auth-type for the login step:
+
+```sh
+npm login --auth-type=legacy
+# or persistently:
+npm config set auth-type legacy
+```
+
+#### `npm publish` triggers `web auth flow` even with a token in `~/.npmrc`
+
+Symptom: publish prints
+`Authenticate your account at: https://www.npmjs.com/auth/cli/...` and
+fails with `404 Not Found - GET .../v1/done?authId=***`.
+
+Cause: with `auth-type=web`, `npm publish` triggers the same web flow
+as `npm login` for the 2FA challenge — even when a token is set.
+
+Fix: `npm config set auth-type legacy`. Combined with a Granular
+Access Token that has "Allow this token to bypass two-factor
+authentication" enabled, publish becomes non-interactive.
+
+#### `npm publish` requests an OTP that the maintainer cannot provide
+
+Symptom: `npm` prompts for a 6-digit OTP after `Proceed?`.
+
+Cause: the maintainer's 2FA method is **passkey only** (no TOTP), and
+the Granular Access Token does NOT have "Allow this token to bypass
+two-factor authentication" enabled. The CLI cannot satisfy the OTP
+prompt with a passkey.
+
+Fix: revoke the token, generate a new Granular Access Token, and
+**explicitly check** the "Allow this token to bypass two-factor
+authentication" box. Update `~/.npmrc` with the new token.
+
+#### `pnpm publish` returns `404 PUT https://registry.npmjs.org/@senn%2faddon-sdk`
+
+Symptom:
+
+```
+npm error 404 The requested resource '@senn/addon-sdk@0.1.0' could not
+be found or you do not have permission to access it.
+```
+
+Most likely causes (in order of frequency):
+
+1. **Granular token's "Selection mode" is "Specific Packages and
+   Scopes"** instead of "All packages and scopes". Specific-mode
+   tokens cannot **create** new packages, only modify existing ones.
+   Re-issue the token with **"All packages and scopes"** + "Read and
+   write".
+2. **The `@senn` org does not exist (yet) on npm.** A new maintainer
+   account is subject to a ~7-day anti-fraud hold before npm allows
+   org creation; the response to `npm org create senn` is `creation
+   denied. Please contact support`. Fix: open a support ticket at
+   https://npmjs.com/support requesting that org creation be unlocked
+   for the account, citing the open-source project context. Wait for
+   the response (typically 1–3 business days). Until then, publish is
+   blocked at the registry side.
+3. **The token has insufficient permission for the org's scope.** Owners
+   of the org can re-issue the token with broader permissions; check
+   that "Permissions → Packages and scopes → All packages and scopes"
+   covers the org membership.
+
+Diagnostic: run
+
+```sh
+mkdir /tmp/canary && cd /tmp/canary
+echo '{"name":"@<your-username>/perm-canary","version":"0.0.1","license":"MIT"}' \
+  > package.json
+npm publish --access public
+```
+
+If the canary publishes successfully under the **personal scope**
+(e.g., `@20m61/perm-canary`) but fails under `@senn`, the org side is
+the issue (cause #2 above). If both fail, the token is the issue
+(cause #1).
+
+After diagnosis, `npm unpublish @<your-username>/perm-canary --force`
+within 72 hours to clean up.
+
+#### `repository.url` warning on publish
+
+```
+npm warn publish "repository.url" was normalized to "git+https://..."
+```
+
+Cause: npm prefers the canonical `git+https://...` form. Auto-corrects
+at publish time but the published tarball's `package.json` then
+diverges byte-for-byte from the committed one, complicating
+reproducibility checks against the git ref.
+
+Fix: pre-apply the canonical form in `package.json#repository.url`.
+The 0.1.0 release prep landed this fix in commit `21c9807`.
+
+#### Token cannot be retrieved with `npm config get`
+
+```
+npm error The //registry.npmjs.org/:_authToken option is protected,
+and cannot be retrieved in this way
+```
+
+Cause: npm v11 deliberately masks token reads to prevent accidental
+exfiltration via `npm config`. This is intentional behaviour, not a
+bug.
+
+Fix: read `~/.npmrc` directly if you need to inspect the token. To
+test write permission, prefer canary-publish over `curl` probes —
+`curl` requires the token in a Bearer header, which means extracting
+it, which the npm CLI now resists.
+
 ## Negative example
 
 Do **not** publish a release if any check in the pre-flight failed, or if

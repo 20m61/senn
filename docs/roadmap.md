@@ -119,16 +119,31 @@ remove every CI/CD vendor dependency from the canonical repo.
   governance table, and runs `SENN_SIGN_RELEASE=<tool>
   pnpm release:addon-sdk <tag>`. ADR stays Proposed until the
   first signed release demonstrates the verify path end-to-end.
+  ADR-0025 (Proposed) selects **minisign** as the project default
+  for that first signed release, with cosign keypair / GPG retained
+  as documented alternatives recorded per release window in the
+  governance table.
+- 🟡 Capability tag naming and v1 registry (ADR-0026) — Proposed;
+  pins the `<feature>-v<major>` kebab-case convention already in
+  informal use (`text-v1`, `whiteboard-v1`) and registers the
+  previously-unnamed peer-binary and media tags
+  (`peer-bin-v1`, `media-audio-v1`, `media-video-v1`).
+  `voice-v1` is superseded by `media-audio-v1`. `docs/core-spec.md`
+  ships the registry table inline alongside the ADR.
 
 ## In flight (deferred items the next phase will pick up)
 
 These are accepted in an ADR but not shipped yet. The order is
 indicative, not committed:
 
-- ⬜ **`@senn/addon-sdk` initial npm publish** — ADR-0019 / ADR-0022
-  toolchain is in place. Pending: npm `@senn` scope acquisition,
-  npm 2FA on the maintainer account, `private:false` flip, and
-  `version: 0.1.0` bump on `packages/addon-sdk/package.json`.
+- 🟡 **`@senn/addon-sdk` initial npm publish** — ADR-0019 / ADR-0022
+  toolchain is in place; package preparation (`private:false`,
+  `version: 0.1.0`, canonicalised `repository.url`, populated
+  `keywords` / `bugs`, metadata regression guards) is complete on
+  `develop`. The local publish flow is verified end-to-end up to the
+  registry PUT. The first publish is held pending **npm `@senn`
+  scope acquisition**; the maintainer account's bypass-2FA Granular
+  Token is configured. The blocked path is purely the npm side.
 - ✅ ~~**Node-side PeerSession tests**~~ — shipped in
   `packages/core/test/peer-session.test.ts`; covers every MUST in
   `docs/peer-session-spec.md` against in-process fakes. Playwright
@@ -147,8 +162,13 @@ indicative, not committed:
   deferral; revisit when a concrete use case lands.
 - 📌 **Backpressure / flow control on binary transfer** (ADR-0011 §6)
   — explicit deferral; v1 keeps the simple framing.
-- 📌 **Encrypted Nostr signaling** (ADR-0014 §"Out of scope") —
-  follow-up ADR will pick the wire format (NIP-44 candidate).
+- 🟡 **Encrypted Nostr signaling** — ADR-0024 (Proposed) closes the
+  ADR-0014 §"Out of scope" deferral by locking in NIP-44 v2 over a
+  room-derived symmetric key as the OPTIONAL v2 content cipher for
+  kind-25556 events. Mandatory v1 fallback for mixed-version rooms.
+  Implementation in `@senn/signaling-nostr` follows once the ADR is
+  Accepted; threat model unchanged from ADR-0014 (invite link is
+  the trust boundary).
 
 ## Versioning
 
