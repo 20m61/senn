@@ -100,7 +100,53 @@ if [[ ! -s "$TARBALL" ]]; then
   exit 1
 fi
 
-# 7. Confirm with the operator before invoking npm publish. The
+# 7. Preflight the optional ADR-0023 provenance configuration BEFORE
+#    `pnpm publish`. Validation MUST run pre-publish: once npm has
+#    accepted the tarball, exiting non-zero leaves an irreversible
+#    partial release (npm version published, no provenance artefacts).
+#    All env / binary / key-existence checks happen here; the actual
+#    signing step (10) only handles invocation against an already-
+#    pack'd tarball.
+SIGN_TOOL="${SENN_SIGN_RELEASE:-}"
+SIGN_KEY="${SENN_SIGN_KEY:-}"
+SIGN_PUBKEY="${SENN_SIGN_PUBKEY:-}"
+if [[ -n "$SIGN_TOOL" ]]; then
+  case "$SIGN_TOOL" in
+    cosign|minisign|gpg) ;;
+    *)
+      echo "error: SENN_SIGN_RELEASE='$SIGN_TOOL' must be one of cosign|minisign|gpg" >&2
+      exit 1
+      ;;
+  esac
+  if [[ -z "$SIGN_KEY" ]]; then
+    echo "error: SENN_SIGN_RELEASE='$SIGN_TOOL' set but SENN_SIGN_KEY is empty" >&2
+    exit 1
+  fi
+  if ! command -v "$SIGN_TOOL" >/dev/null; then
+    echo "error: '$SIGN_TOOL' not on PATH (required by SENN_SIGN_RELEASE)" >&2
+    exit 1
+  fi
+  case "$SIGN_TOOL" in
+    cosign|minisign)
+      if [[ ! -f "$SIGN_KEY" ]]; then
+        echo "error: SENN_SIGN_KEY='$SIGN_KEY' is not a regular file" >&2
+        exit 1
+      fi
+      ;;
+    gpg)
+      if ! gpg --list-secret-keys --with-colons "$SIGN_KEY" >/dev/null 2>&1; then
+        echo "error: gpg keyring has no secret key matching SENN_SIGN_KEY='$SIGN_KEY'" >&2
+        exit 1
+      fi
+      ;;
+  esac
+  if [[ "$SIGN_TOOL" == "minisign" && -n "$SIGN_PUBKEY" && ! -f "$SIGN_PUBKEY" ]]; then
+    echo "error: SENN_SIGN_PUBKEY='$SIGN_PUBKEY' is not a regular file" >&2
+    exit 1
+  fi
+fi
+
+# 8. Confirm with the operator before invoking npm publish. The
 #    operator's npm credentials, npm 2FA prompt, and registry choice
 #    live outside this script — `pnpm publish` reads ~/.npmrc.
 echo
@@ -109,6 +155,9 @@ echo "  package:  @senn/addon-sdk@$VERSION"
 echo "  dist-tag: $DIST_TAG"
 echo "  registry: $(npm config get registry)"
 echo "  user:     $(npm whoami 2>/dev/null || echo '<not logged in — npm publish will fail>')"
+if [[ -n "$SIGN_TOOL" ]]; then
+  echo "  provenance: $SIGN_TOOL (key: $SIGN_KEY)"
+fi
 echo
 read -r -p "Proceed? [y/N] " REPLY
 case "$REPLY" in
@@ -116,7 +165,7 @@ case "$REPLY" in
   *) echo "aborted." >&2; exit 130 ;;
 esac
 
-# 8. Publish. `--no-git-checks` keeps pnpm from re-running its own git
+# 9. Publish. `--no-git-checks` keeps pnpm from re-running its own git
 #    state checks (we already enforced them in step 1).
 echo "==> pnpm publish --tag $DIST_TAG --access public --no-git-checks"
 pnpm publish --tag "$DIST_TAG" --access public --no-git-checks
@@ -124,7 +173,7 @@ pnpm publish --tag "$DIST_TAG" --access public --no-git-checks
 echo
 echo "published @senn/addon-sdk@$VERSION (dist-tag: $DIST_TAG)"
 
-# 9. Optional: vendor-neutral provenance (ADR-0023).
+# 10. Optional: vendor-neutral provenance (ADR-0023).
 #    Off by default — the publish flow stays vendor-neutral and
 #    zero-dependency. Activated per release by:
 #
@@ -143,14 +192,15 @@ echo "published @senn/addon-sdk@$VERSION (dist-tag: $DIST_TAG)"
 #    The maintainer uploads them to the GitHub Release for $TAG and
 #    confirms the fingerprint against
 #    docs/governance.md "Release signing identities".
-SIGN_TOOL="${SENN_SIGN_RELEASE:-}"
+#
+#    Step 7's preflight already validated env vars, the signer binary,
+#    and key-material existence. This block only invokes the signer.
+#    A signer-side error here is recoverable: the npm package is
+#    already published, but the operator can re-pack the same
+#    `pnpm pack` output (tarballs are byte-reproducible from the same
+#    git tag) and re-run the signing commands manually against the
+#    GitHub Release.
 if [[ -n "$SIGN_TOOL" ]]; then
-  SIGN_KEY="${SENN_SIGN_KEY:-}"
-  if [[ -z "$SIGN_KEY" ]]; then
-    echo "error: SENN_SIGN_RELEASE='$SIGN_TOOL' set but SENN_SIGN_KEY is empty" >&2
-    exit 1
-  fi
-
   STAGE="$REPO_ROOT/dist/release"
   mkdir -p "$STAGE"
   ARTEFACT="$STAGE/senn-addon-sdk-$VERSION.tgz"
@@ -160,7 +210,6 @@ if [[ -n "$SIGN_TOOL" ]]; then
 
   case "$SIGN_TOOL" in
     cosign)
-      command -v cosign >/dev/null || { echo "error: cosign not on PATH" >&2; exit 1; }
       echo "==> cosign sign-blob (key: $SIGN_KEY)"
       cosign sign-blob --yes \
         --key "$SIGN_KEY" \
@@ -169,27 +218,21 @@ if [[ -n "$SIGN_TOOL" ]]; then
         "$ARTEFACT"
       ;;
     minisign)
-      command -v minisign >/dev/null || { echo "error: minisign not on PATH" >&2; exit 1; }
       echo "==> minisign -S (secret: $SIGN_KEY)"
       minisign -S -s "$SIGN_KEY" -m "$ARTEFACT" -x "$SIG"
-      if [[ -n "${SENN_SIGN_PUBKEY:-}" && -f "$SENN_SIGN_PUBKEY" ]]; then
-        cp "$SENN_SIGN_PUBKEY" "$CERT"
+      if [[ -n "$SIGN_PUBKEY" ]]; then
+        cp "$SIGN_PUBKEY" "$CERT"
       else
-        echo "warn: SENN_SIGN_PUBKEY not set or not a file; .cert slot left empty." >&2
+        echo "warn: SENN_SIGN_PUBKEY not set; .cert slot left empty." >&2
         echo "      Upload the maintainer's minisign public key alongside the .sig" >&2
         echo "      manually so verifiers have a complete artefact set." >&2
       fi
       ;;
     gpg)
-      command -v gpg >/dev/null || { echo "error: gpg not on PATH" >&2; exit 1; }
       echo "==> gpg --detach-sign --armor (signer: $SIGN_KEY)"
       gpg --batch --yes --local-user "$SIGN_KEY" \
         --detach-sign --armor --output "$SIG" "$ARTEFACT"
       gpg --batch --yes --export --armor "$SIGN_KEY" >"$CERT"
-      ;;
-    *)
-      echo "error: SENN_SIGN_RELEASE='$SIGN_TOOL' must be one of cosign|minisign|gpg" >&2
-      exit 1
       ;;
   esac
 
