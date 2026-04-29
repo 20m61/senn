@@ -25,10 +25,41 @@ this peer to one remote peer in one room. This page is normative.
   (the peer that produced the SDP offer). The DataChannel labelled
   `core.text` MUST be reachable from the joiner via `pc.ondatachannel`.
 - Outgoing payloads on `core.text` MUST be UTF-8 strings ≤ 64 KiB.
+- A second DataChannel labelled `core.bin` MUST be created by the
+  inviter alongside `core.text`. It MUST be configured
+  `{ ordered: true }` with default reliability. The text channel MUST
+  NOT carry binary frames; the binary channel MUST NOT carry text
+  frames (ADR-0011).
+- A logical binary message sent via `sendBinary(...)` MUST be ≤ **4 MiB**
+  (ADR-0012). Each wire frame on `core.bin` MUST be ≤ **64 KiB**
+  (ADR-0011); the session MUST chunk transparently for messages larger
+  than one frame and MUST emit one `binary` event per fully reassembled
+  logical message.
+- The receiver-side reassembly buffer MUST be bounded at **16 MiB**
+  in-flight per peer; messages exceeding the bound MUST be dropped
+  with a session-level error. Reassembly state for an in-flight message
+  MUST time out after **60 s** since the first frame.
 - The session MUST emit a typed event stream:
   - `state` — one of `idle`, `connecting`, `connected`, `closed`, `failed`.
   - `text` — a UTF-8 message received from the peer.
+  - `binary` — a fully reassembled binary message
+    (`{ addon, mime, bytes }`) received from the peer.
+  - `remote-track` — a remote audio or video track was added by the
+    peer (`{ kind, track, streams }`); `kind` is `"audio" | "video"`.
+  - `remote-track-ended` — a previously announced remote track has
+    ended (`{ kind, track }`).
   - `error` — a connection-level error.
+- The session MAY accept media tracks via `addLocalTrack(...)` once it
+  is `connecting` or `connected`. Renegotiation MUST ride the
+  perfect-negotiation pattern through the existing
+  `SignalingTransport` — no separate signaling channel is opened for
+  media. The session MUST NOT call `getUserMedia` /
+  `getDisplayMedia` itself; capture is host-owned (ADR-0015).
+- The session MUST NOT log binary payload bodies, MUST NOT log media
+  track content, and MUST NOT expose any host-supplied
+  `MediaStreamTrack` reference back to the host through any channel
+  other than the explicit `remote-track` / `remote-track-ended`
+  events.
 - The session MUST close cleanly:
   - `close()` MUST publish a `bye` signaling message before tearing down.
   - `close()` MUST stop the peer connection, close the DataChannel, and
@@ -94,9 +125,33 @@ export type PeerSessionState =
   | "closed"
   | "failed";
 
+export interface PeerSessionBinaryMessage {
+  /** Routing key (e.g. addon id). Used by AddonHost to demux per-addon. */
+  readonly addon: string;
+  readonly mime: string;
+  readonly bytes: Uint8Array;
+}
+
+export interface PeerSessionRemoteTrack {
+  readonly kind: "audio" | "video";
+  readonly track: MediaStreamTrack;
+  readonly streams: ReadonlyArray<MediaStream>;
+}
+
+export interface PeerSessionLocalSender {
+  readonly senderId: string;
+  readonly kind: "audio" | "video";
+  /** Idempotent. Removes the track from the peer connection and rides
+   *  the existing perfect-negotiation flow. */
+  remove(): Promise<void>;
+}
+
 export interface PeerSessionEvents {
   state: PeerSessionState;
   text: string;
+  binary: PeerSessionBinaryMessage;
+  "remote-track": PeerSessionRemoteTrack;
+  "remote-track-ended": { kind: "audio" | "video"; track: MediaStreamTrack };
   error: Error;
 }
 
@@ -117,6 +172,18 @@ export class PeerSession {
   ): () => void;
   start(): Promise<void>;
   sendText(message: string): Promise<void>;
+  /** Send a logical binary message (≤ 4 MiB) on `core.bin`. The session
+   *  chunks transparently into ≤ 64 KiB wire frames; receivers see one
+   *  `binary` event per logical message. */
+  sendBinary(message: PeerSessionBinaryMessage): Promise<void>;
+  /** Attach a host-owned audio or video track to the peer connection.
+   *  The host owns the track lifetime; PeerSession surfaces a
+   *  SENN-shaped handle. Renegotiation rides the existing
+   *  `SignalingTransport` via perfect negotiation. */
+  addLocalTrack(
+    track: MediaStreamTrack,
+    stream?: MediaStream,
+  ): Promise<PeerSessionLocalSender>;
   close(): Promise<void>;
   readonly state: PeerSessionState;
 }
@@ -152,6 +219,12 @@ A session that:
 - Skips `pc.close()` on `bye` — **rejected**, `close()` MUST tear down
   the connection.
 - Reads or logs `text` payloads — **rejected**, payloads are user data.
+- Routes binary frames through `core.text` (or text frames through
+  `core.bin`) — **rejected**, the channels are split per ADR-0011.
+- Calls `sendBinary` with a 5 MiB body — **rejected**, exceeds the
+  4 MiB per-message cap (ADR-0012).
+- Calls `navigator.mediaDevices.getUserMedia(...)` from inside the
+  PeerSession — **rejected**, capture is host-owned (ADR-0015).
 
 ## Conformance
 
@@ -180,5 +253,10 @@ MUST stay green before a PR merges to `develop`.
 
 - [ADR-0004](adr/0004-p2p-transport-strategy.md) — WebRTC primary transport.
 - [ADR-0007](adr/0007-vendor-neutral-signaling-and-relay.md) — pluggable signaling.
+- [ADR-0011](adr/0011-binary-peer-transfer.md) — `core.bin` channel and the 64 KiB single-frame baseline.
+- [ADR-0012](adr/0012-chunked-binary-peer-transfer.md) — 4 MiB per-message cap, transparent chunking, and the reassembly bounds.
+- [ADR-0015](adr/0015-media-tracks.md) — host-captured media tracks, perfect-negotiation pattern, host-only `getUserMedia` / `getDisplayMedia`.
 - [room-and-invite-spec.md](room-and-invite-spec.md) — Room/PeerId formats.
 - [signaling-url-fragment-spec.md](signaling-url-fragment-spec.md) — Tier-0 carrier.
+- [addon-binary-transfer-spec.md](addon-binary-transfer-spec.md) — add-on-facing wire of `sendBinary` / `binary`.
+- [addon-media-spec.md](addon-media-spec.md) — add-on-facing wire of `addLocalTrack` / `remote-track*`.
