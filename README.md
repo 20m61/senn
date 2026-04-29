@@ -138,6 +138,17 @@ public release. The wire layer is implemented end-to-end:
   (gzip 24 KB) JS bundle plus addon assets, deployable to any static
   host (see `docs/deployment.md`).
 
+> **`@senn/addon-sdk` 0.1.0 — pending npm publication.** The release
+> is prepared on `develop` (`packages/addon-sdk/package.json#version`
+> = `0.1.0`, `private:false`, ADR-0018 surface frozen) and the
+> `pnpm release:addon-sdk` flow is verified end-to-end. The first
+> publish to the public registry is held while the `@senn` npm scope
+> is being provisioned (npm anti-fraud holds new accounts ~7 days
+> before allowing org creation; support ticket open). Until then,
+> external authors install via `pnpm pack` per
+> [`docs/dev/writing-an-addon.md`](docs/dev/writing-an-addon.md)
+> §"Trying the SDK from an external project (pre-publish)".
+
 API surface and the wire format are still subject to change before
 1.0; ADR amendments will be additive when possible (see ADR-0010 / 0012).
 
