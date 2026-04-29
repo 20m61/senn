@@ -2,10 +2,13 @@
 
 ## Status
 
-Proposed (2026-04-29). Formalises the naming pattern already used in
-`docs/core-spec.md` §"Capability Negotiation" and `docs/addon-manifest.md`,
-and introduces a normative v1 capability registry that closes the drift items
-raised by the `sdd-expert` audit (items #7 and #8) against ADR-0011,
+Implemented (2026-04-29; PR #20, commit a17a696). The v1 capability
+registry table is shipped on `develop` in `docs/core-spec.md`
+§"Capability Negotiation"; the `<feature>-v<major>` naming pattern is
+the contract every existing tag (`text-v1`, `peer-bin-v1`,
+`media-audio-v1`, `media-video-v1`, `file-transfer-v1`,
+`addon-runtime-v1`, `local-storage-v1`) already satisfies. Closes drift
+items #7 and #8 from the `sdd-expert` audit against ADR-0011,
 ADR-0012, and ADR-0015.
 
 ## Context

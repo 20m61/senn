@@ -2,16 +2,16 @@
 
 ## Status
 
-Proposed (2026-04-29). This ADR complements ADR-0023 — it does not supersede
+Accepted (2026-04-29). This ADR complements ADR-0023 — it does not supersede
 it. ADR-0023 stays authoritative for the provenance surface, artefact format,
 publication path, and verification protocol. This ADR concretises the one
 choice ADR-0023 deliberately left open: which signing tool the maintainer uses
 by default for the first signed `@senn/addon-sdk` release.
 
-This ADR transitions to Accepted when the maintainer ships the first signed
-release **and** fills in the `docs/governance.md` "Release signing identities"
-table row — the same activation gate ADR-0023 sets for its own
-Proposed → Accepted move.
+This ADR transitions to **Implemented** when the maintainer ships the first
+signed release **and** fills in the `docs/governance.md` "Release signing
+identities" table row — the same activation gate ADR-0023 sets for its own
+Accepted → Implemented move.
 
 ## Context
 
