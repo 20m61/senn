@@ -17,11 +17,18 @@ own network connections. Dynamic data flow **MUST** go through SENN Core.
 ```txt
 addon/
   manifest.json
+  manifest.sig.json   # optional; required for signed publishers (ADR-0008)
   index.html
   addon.js
   style.css
   assets/
 ```
+
+Signed add-ons (every official SENN add-on, and any add-on listed in a
+registry that pins a `trustedKeys` entry) **MUST** ship a detached
+`manifest.sig.json` adjacent to `manifest.json`. The detached form is
+normative; an inline signature block on `manifest.json` is **NOT**
+defined. See [addon-signing-spec.md](addon-signing-spec.md).
 
 ## Manifest Example
 
@@ -72,8 +79,11 @@ Allows receiving add-on messages from connected peers through SENN Core.
 
 ### `peer.send.bin`
 
-Allows sending binary payloads (≤ 64 KiB single-frame, v1) to the
-connected peer over the dedicated `core.bin` channel. See
+Allows sending binary payloads to the connected peer over the dedicated
+`core.bin` channel. The wire-frame budget is **64 KiB**; logical messages
+up to **4 MiB** are chunked transparently by the sender — add-ons see one
+logical `send-bin` regardless of how many frames travel on the wire
+(ADR-0011 binary peer transfer; ADR-0012 chunked extension). See
 [addon-binary-transfer-spec.md](addon-binary-transfer-spec.md).
 
 ### `peer.receive.bin`
@@ -117,13 +127,12 @@ the host. The add-on never sees raw audio. See
 ### `media.send.audio` / `media.send.video` / `media.receive.audio` / `media.receive.video`
 
 Cross-peer audio and video tracks. The add-on never owns a
-`MediaStreamTrack`; the host captures with `getUserMedia` and the
-add-on places host-rendered `<video>` / `<audio>` elements via
-opaque routing handles. Currently **design only** — see
-[ADR-0015](adr/0015-media-tracks.md) and
-[addon-media-spec.md](addon-media-spec.md). Manifests MAY declare
-these permissions ahead of implementation; the bridge ops will
-land in follow-up PRs.
+`MediaStreamTrack`; the host captures with `getUserMedia` /
+`getDisplayMedia` and the add-on places host-rendered `<video>` /
+`<audio>` elements via opaque routing handles. The wire surface and
+bridge ops are defined in [addon-media-spec.md](addon-media-spec.md);
+the design rationale lives in
+[ADR-0015](adr/0015-media-tracks.md).
 
 ## Forbidden
 
@@ -132,6 +141,12 @@ Add-ons **MUST NOT**:
 - Directly use WebSocket for dynamic user data.
 - Directly use WebRTC.
 - Directly access RTCDataChannel.
+- Directly access `RTCRtpSender` or `RTCRtpReceiver`.
+- Call `navigator.mediaDevices.getUserMedia` or `getDisplayMedia`
+  inside the add-on iframe — capture is host-side only
+  ([addon-media-spec.md](addon-media-spec.md)).
+- Construct or use `MediaRecorder`, `MediaSource`, or
+  `MediaStreamTrack` inside the add-on iframe.
 - Exfiltrate data through fetch.
 - Access other add-ons' storage.
 - Access Core private storage.

@@ -54,4 +54,5 @@ archaeology.
 | 0021 | [Local-first conformance gate (no dependency on GitHub Actions)](0021-local-first-conformance.md) | Implemented (hardened by 0022) |
 | 0022 | [Local-first publish pipeline (supersedes 0019 §5)](0022-local-first-publish-pipeline.md) | Accepted |
 | 0023 | [Vendor-neutral provenance for `@senn/addon-sdk` releases](0023-vendor-neutral-provenance.md) | Proposed |
+| 0024 | [Encrypted Nostr signaling content via NIP-44](0024-encrypted-nostr-signaling-nip44.md) | Proposed |
 | 0025 | [Default signing tool for ADR-0023 vendor-neutral provenance](0025-release-signing-tool-default.md) | Proposed |

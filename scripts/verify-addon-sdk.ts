@@ -20,6 +20,20 @@
  *      when the network is unavailable.
  *   7. (ADR-0019 §6b) The runtime classic-script bytes match every
  *      shipped copy under apps/web/public/addons and examples/.
+ *   8. Publish-time metadata that must not regress:
+ *        - `repository.url` is in canonical npm form (`git+https://...`)
+ *          so the published tarball's package.json is byte-identical
+ *          to the committed one (matters for ADR-0023 §3 verification).
+ *        - `bugs.url` is set so the npm package page shows a working
+ *          "Report a bug" link.
+ *        - `keywords` is a non-empty array so the package is
+ *          discoverable on npm search.
+ *        - `homepage` is set so consumers can find the project from
+ *          the npm package page.
+ *        - `license` is "Apache-2.0" (charter principle).
+ *      These were caught by hand during the 0.1.0 prep; codified here
+ *      so future publishable packages do not re-introduce the same
+ *      gaps. (See `docs/dev/release.md` §"Troubleshooting".)
  *
  * Run after `pnpm --filter @senn/addon-sdk build` (or after a full
  * `pnpm typecheck`, which builds dist as a side-effect via project
@@ -60,6 +74,11 @@ interface PackageJson {
   readonly types?: unknown;
   readonly exports?: PackageExportsMap;
   readonly files?: unknown;
+  readonly license?: unknown;
+  readonly homepage?: unknown;
+  readonly repository?: unknown;
+  readonly bugs?: unknown;
+  readonly keywords?: unknown;
 }
 
 const failures: string[] = [];
@@ -168,6 +187,73 @@ async function checkPackageJson(): Promise<void> {
   });
   expectExportEntry(pkg.exports, "./runtime/senn-addon-sdk.js", "./runtime/senn-addon-sdk.js");
   expectExportEntry(pkg.exports, "./package.json", "./package.json");
+
+  checkPublishMetadata(pkg);
+}
+
+function checkPublishMetadata(pkg: PackageJson): void {
+  // license: charter principle is Apache-2.0; deviation is a release blocker.
+  if (pkg.license !== "Apache-2.0") {
+    fail(`package.json license = ${JSON.stringify(pkg.license)}, expected "Apache-2.0"`);
+  }
+
+  // homepage: npm package landing page links here. A missing field
+  // produces a page with no project link, which hurts discoverability.
+  if (typeof pkg.homepage !== "string" || pkg.homepage.length === 0) {
+    fail("package.json homepage: must be a non-empty string");
+  }
+
+  // repository.url: must be in npm-canonical form (`git+https://...`).
+  // Without the `git+` prefix npm auto-corrects at publish time and the
+  // published tarball's package.json then diverges byte-for-byte from
+  // the committed one — see docs/dev/release.md §"Troubleshooting" and
+  // commit 21c9807 for the original incident.
+  const repo = pkg.repository as { type?: unknown; url?: unknown } | unknown;
+  if (typeof repo !== "object" || repo === null) {
+    fail("package.json repository: must be an object with type+url");
+  } else {
+    const url = (repo as { url?: unknown }).url;
+    if (typeof url !== "string" || url.length === 0) {
+      fail("package.json repository.url: must be a non-empty string");
+    } else if (!url.startsWith("git+")) {
+      fail(
+        `package.json repository.url = ${JSON.stringify(url)}: must start with "git+" (npm canonical form). Without the prefix, npm auto-corrects at publish time and the tarball's package.json drifts byte-for-byte from the committed one.`,
+      );
+    }
+  }
+
+  // bugs.url: drives the "Report a bug" link on the npm package page.
+  // String form is also accepted by npm; we require the object form so
+  // a future addition (e.g., bugs.email) has a stable container.
+  const bugs = pkg.bugs as { url?: unknown } | unknown;
+  if (typeof bugs !== "object" || bugs === null) {
+    fail("package.json bugs: must be an object with a url field");
+  } else {
+    const url = (bugs as { url?: unknown }).url;
+    if (typeof url !== "string" || url.length === 0) {
+      fail("package.json bugs.url: must be a non-empty string");
+    }
+  }
+
+  // keywords: drives npm search ranking. Empty arrays produce no
+  // discoverability boost. We require ≥3 entries to discourage
+  // single-word stubs that do not actually help users find the
+  // package.
+  if (!Array.isArray(pkg.keywords)) {
+    fail("package.json keywords: must be an array");
+  } else {
+    if (pkg.keywords.length < 3) {
+      fail(
+        `package.json keywords: only ${pkg.keywords.length} entr${pkg.keywords.length === 1 ? "y" : "ies"} — provide at least 3 for npm search discoverability`,
+      );
+    }
+    for (const kw of pkg.keywords) {
+      if (typeof kw !== "string" || kw.length === 0) {
+        fail("package.json keywords: every entry must be a non-empty string");
+        break;
+      }
+    }
+  }
 }
 
 async function checkAmbientGlobal(): Promise<void> {

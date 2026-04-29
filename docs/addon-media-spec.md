@@ -8,10 +8,14 @@ when, and only when, they appear in all capitals.
 
 ## Status
 
-Design only. The bridge ops below are normative for any future
-implementation; the wire format on `RTCPeerConnection` is the
+Implemented. Stage 1 (PeerSession `addLocalTrack` + `remote-track`
+events) shipped in commit `d32497a`; stages 2–5 (AddonHost bridge
+ops, SDK surface, reference `voice-call` add-on, forbidden-API grep
+extension) shipped in `65c3e1c`. Bidirectional perfect negotiation
+followed in `4cd0b4a`, and the host-side `track.stop()` privacy fix
+landed in `4bddf5b`. The wire format on `RTCPeerConnection` is the
 existing WebRTC mechanics — there is nothing SENN-specific on the
-network side.
+network side. The bridge ops below are the normative add-on contract.
 
 ## Intent
 
@@ -231,20 +235,26 @@ pnpm --filter @senn/web e2e               # reference UI (when implemented)
 pnpm check:addon-forbidden                # extended forbidden-API list
 ```
 
-## Implementation staging
+## Implementation history
 
-This spec is shippable as-is for review. Implementation is staged:
+All five stages have shipped on `develop`:
 
-1. PeerSession track surface (`@senn/core`):
-   `addLocalTrack` / `removeLocalTrack`, `track` events, internal
-   renegotiation through the existing `SignalingTransport`.
-2. AddonHost bridge ops (`@senn/addon-runtime`):
+1. ✅ PeerSession track surface (`@senn/core`):
+   `addLocalTrack` / `removeLocalTrack`, `remote-track-added` /
+   `remote-track-removed` events, internal renegotiation through the
+   existing `SignalingTransport`.
+2. ✅ AddonHost bridge ops (`@senn/addon-runtime`):
    permission gates, element-handle registry, level pump.
-3. SDK surface (`@senn/addon-sdk`).
-4. Reference addon `voice-call` showing 1:1 audio.
-5. Forbidden-API grep extension.
+3. ✅ SDK surface (`@senn/addon-sdk`).
+4. ✅ Reference add-on `voice-call` (`addons/official/voice-call`)
+   showing 1:1 bidirectional audio + video.
+5. ✅ Forbidden-API grep extension (`pnpm check:addon-forbidden`)
+   covers `getUserMedia`, `getDisplayMedia`, `MediaRecorder`,
+   `MediaSource`, `MediaStreamTrack`, `RTCRtpSender`, and
+   `RTCRtpReceiver`.
 
-Each stage lands as its own PR with its own test coverage.
+See [ADR-0015](adr/0015-media-tracks.md) for the merged-commit
+references.
 
 ## Cross-references
 

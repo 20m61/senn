@@ -59,7 +59,15 @@ pnpm tsx scripts/validate-addon-manifest.ts addons/official/whiteboard/manifest.
 
 To revalidate every shipped manifest at once: `pnpm validate:all-manifests`.
 
+## Signing
+
+Manifest signing is **detached**, not inline. A signed publisher ships
+`manifest.sig.json` adjacent to `manifest.json`; this manifest schema is
+not extended with a `signature` / `publicKey` / `signedAt` block. The
+detached form is the normative contract — see
+[addon-signing-spec.md](addon-signing-spec.md) (wire format) and
+[ADR-0008](adr/0008-manifest-signing.md) (decision).
+
 ## Future extensions (non-normative)
 
 - Translated `name` / `description` per locale.
-- Optional signature block (`signature`, `publicKey`, `signedAt`) once the SENN Verified Registry ships.
