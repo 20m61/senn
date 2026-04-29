@@ -172,6 +172,24 @@ interface CheckResult {
   readonly detail?: string;
 }
 
+type CheckOutcome = { readonly ok: true } | { readonly ok: false; readonly detail: string };
+
+/**
+ * Wraps a check body so each spec clause's check site only owns the
+ * setup/assert/teardown shape — `name` is bound once at the call site
+ * and surfacing a thrown error becomes an `{ ok: false, detail }`
+ * result automatically. The body is responsible for its own
+ * `try { … } finally { close() }` because adapter close is per-check.
+ */
+async function runCheck(name: string, body: () => Promise<CheckOutcome>): Promise<CheckResult> {
+  try {
+    const outcome = await body();
+    return outcome.ok ? { name, ok: true } : { name, ok: false, detail: outcome.detail };
+  } catch (err) {
+    return { name, ok: false, detail: (err as Error).message };
+  }
+}
+
 async function waitFor<T>(probe: () => T | undefined, timeoutMs = 1_000): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -197,110 +215,83 @@ async function runChecks(): Promise<CheckResult[]> {
   // 1. publish → subscribe round-trip via a single relay, with the
   //    adapter publishing kind 25556 and the matching #t tag (spec
   //    §"Normative checklist" 5–7).
-  {
-    FakeWebSocket.reset();
-    const relay = new MockRelay("solo");
-    FakeWebSocket.bindRelay("ws://mock/solo", relay);
-    const aliceTx = new NostrSignaling({ relays: ["ws://mock/solo"], wsCtor: FAKE_WS });
-    const bobTx = new NostrSignaling({ relays: ["ws://mock/solo"], wsCtor: FAKE_WS });
-    try {
-      const room = newRoomId();
-      const alice = newPeerId();
-      const inbox: SignalingMessage[] = [];
-      bobTx.subscribe(room, (m) => inbox.push(m));
-      // Give the REQ a tick to land before the publish.
-      await new Promise((r) => setTimeout(r, 5));
-      await aliceTx.publish(room, offer(alice));
-      await waitFor(() => (inbox.length > 0 ? inbox[0] : undefined));
-      const got = inbox[0];
-      const event = relay.published[0];
-      if (!event) {
-        results.push({
-          name: "publish → subscribe round-trip",
-          ok: false,
-          detail: "no event seen by relay",
-        });
-      } else if (event.kind !== SENN_NOSTR_KIND) {
-        results.push({
-          name: "publish → subscribe round-trip",
-          ok: false,
-          detail: `published kind ${event.kind}, expected ${SENN_NOSTR_KIND}`,
-        });
-      } else if (!hasSennRoomTag(event, room)) {
-        results.push({
-          name: "publish → subscribe round-trip",
-          ok: false,
-          detail: `event tags missed the senn:<roomId> marker; got ${JSON.stringify(event.tags)}`,
-        });
-      } else if (got?.kind === "offer" && got.from === alice) {
-        results.push({ name: "publish → subscribe round-trip", ok: true });
-      } else {
-        results.push({
-          name: "publish → subscribe round-trip",
+  results.push(
+    await runCheck("publish → subscribe round-trip", async () => {
+      FakeWebSocket.reset();
+      const relay = new MockRelay("solo");
+      FakeWebSocket.bindRelay("ws://mock/solo", relay);
+      const aliceTx = new NostrSignaling({ relays: ["ws://mock/solo"], wsCtor: FAKE_WS });
+      const bobTx = new NostrSignaling({ relays: ["ws://mock/solo"], wsCtor: FAKE_WS });
+      try {
+        const room = newRoomId();
+        const alice = newPeerId();
+        const inbox: SignalingMessage[] = [];
+        bobTx.subscribe(room, (m) => inbox.push(m));
+        // Give the REQ a tick to land before the publish.
+        await new Promise((r) => setTimeout(r, 5));
+        await aliceTx.publish(room, offer(alice));
+        await waitFor(() => (inbox.length > 0 ? inbox[0] : undefined));
+        const got = inbox[0];
+        const event = relay.published[0];
+        if (!event) return { ok: false, detail: "no event seen by relay" };
+        if (event.kind !== SENN_NOSTR_KIND) {
+          return { ok: false, detail: `published kind ${event.kind}, expected ${SENN_NOSTR_KIND}` };
+        }
+        if (!hasSennRoomTag(event, room)) {
+          return {
+            ok: false,
+            detail: `event tags missed the senn:<roomId> marker; got ${JSON.stringify(event.tags)}`,
+          };
+        }
+        if (got?.kind === "offer" && got.from === alice) return { ok: true };
+        return {
           ok: false,
           detail: `delivered ${JSON.stringify(got)} but expected offer from ${alice}`,
-        });
+        };
+      } finally {
+        await aliceTx.close();
+        await bobTx.close();
       }
-    } catch (err) {
-      results.push({
-        name: "publish → subscribe round-trip",
-        ok: false,
-        detail: (err as Error).message,
-      });
-    } finally {
-      await aliceTx.close();
-      await bobTx.close();
-    }
-  }
+    }),
+  );
 
   // 2. Dedup across multiple relays — one logical message MUST surface
   //    once even when fanned out by N relays (spec §"Normative
   //    checklist" 8).
-  {
-    FakeWebSocket.reset();
-    const relayA = new MockRelay("a");
-    const relayB = new MockRelay("b");
-    FakeWebSocket.bindRelay("ws://mock/a", relayA);
-    FakeWebSocket.bindRelay("ws://mock/b", relayB);
-    const aliceTx = new NostrSignaling({
-      relays: ["ws://mock/a", "ws://mock/b"],
-      wsCtor: FAKE_WS,
-    });
-    const bobTx = new NostrSignaling({
-      relays: ["ws://mock/a", "ws://mock/b"],
-      wsCtor: FAKE_WS,
-    });
-    try {
-      const room = newRoomId();
-      const alice = newPeerId();
-      const inbox: SignalingMessage[] = [];
-      bobTx.subscribe(room, (m) => inbox.push(m));
-      await new Promise((r) => setTimeout(r, 5));
-      await aliceTx.publish(room, offer(alice));
-      await waitFor(() => (inbox.length >= 1 ? inbox.length : undefined));
-      // Settle window: a duplicate would arrive within a few ms via the
-      // second relay's fan-out path.
-      await new Promise((r) => setTimeout(r, 50));
-      if (inbox.length === 1) {
-        results.push({ name: "dedup across multiple relays", ok: true });
-      } else {
-        results.push({
-          name: "dedup across multiple relays",
-          ok: false,
-          detail: `delivered ${inbox.length} copies, expected 1`,
-        });
-      }
-    } catch (err) {
-      results.push({
-        name: "dedup across multiple relays",
-        ok: false,
-        detail: (err as Error).message,
+  results.push(
+    await runCheck("dedup across multiple relays", async () => {
+      FakeWebSocket.reset();
+      const relayA = new MockRelay("a");
+      const relayB = new MockRelay("b");
+      FakeWebSocket.bindRelay("ws://mock/a", relayA);
+      FakeWebSocket.bindRelay("ws://mock/b", relayB);
+      const aliceTx = new NostrSignaling({
+        relays: ["ws://mock/a", "ws://mock/b"],
+        wsCtor: FAKE_WS,
       });
-    } finally {
-      await aliceTx.close();
-      await bobTx.close();
-    }
-  }
+      const bobTx = new NostrSignaling({
+        relays: ["ws://mock/a", "ws://mock/b"],
+        wsCtor: FAKE_WS,
+      });
+      try {
+        const room = newRoomId();
+        const alice = newPeerId();
+        const inbox: SignalingMessage[] = [];
+        bobTx.subscribe(room, (m) => inbox.push(m));
+        await new Promise((r) => setTimeout(r, 5));
+        await aliceTx.publish(room, offer(alice));
+        await waitFor(() => (inbox.length >= 1 ? inbox.length : undefined));
+        // Settle window: a duplicate would arrive within a few ms via
+        // the second relay's fan-out path.
+        await new Promise((r) => setTimeout(r, 50));
+        if (inbox.length === 1) return { ok: true };
+        return { ok: false, detail: `delivered ${inbox.length} copies, expected 1` };
+      } finally {
+        await aliceTx.close();
+        await bobTx.close();
+      }
+    }),
+  );
 
   // 3. Receive-path kind filter — a relay that fans out a kind-1 event
   //    matching the same #t filter MUST NOT surface to the handler
@@ -314,151 +305,136 @@ async function runChecks(): Promise<CheckResult[]> {
   //    barrier — by the time it arrives, any earlier deliveries have
   //    already drained through the queueMicrotask chain. This avoids the
   //    timing fragility of a fixed `setTimeout`-only "absence" assertion.
-  {
-    FakeWebSocket.reset();
-    const relay = new MockRelay("foreign");
-    FakeWebSocket.bindRelay("ws://mock/foreign", relay);
-    const subscriber = new NostrSignaling({ relays: ["ws://mock/foreign"], wsCtor: FAKE_WS });
-    const publisher = new NostrSignaling({ relays: ["ws://mock/foreign"], wsCtor: FAKE_WS });
-    try {
-      const room = newRoomId();
-      const probe = newPeerId();
-      const inbox: SignalingMessage[] = [];
-      subscriber.subscribe(room, (m) => inbox.push(m));
-      await new Promise((r) => setTimeout(r, 5));
-      // Foreign-kind first — would arrive before the real event if the
-      // adapter's `handleEvent` failed to filter on kind.
-      relay.injectForeignKind(room, JSON.stringify({ kind: "offer", from: newPeerId(), sdp: "x" }));
-      await publisher.publish(room, offer(probe));
-      // Wait for the real event to land. Mock matches by #t, so the
-      // relay's REQ filter alone wouldn't drop kind 1; the adapter's
-      // `handleEvent` MUST filter on event.kind. (See
-      // `packages/signaling-nostr/src/index.ts` `handleEvent`'s early
-      // return when `event.kind !== SENN_NOSTR_KIND`.)
-      await waitFor(() =>
-        inbox.some((m) => m.kind === "offer" && m.from === probe) ? true : undefined,
-      );
-      if (inbox.length === 1 && inbox[0]?.kind === "offer" && inbox[0].from === probe) {
-        results.push({ name: "non-25556 events are dropped", ok: true });
-      } else {
-        results.push({
-          name: "non-25556 events are dropped",
+  results.push(
+    await runCheck("non-25556 events are dropped", async () => {
+      FakeWebSocket.reset();
+      const relay = new MockRelay("foreign");
+      FakeWebSocket.bindRelay("ws://mock/foreign", relay);
+      const subscriber = new NostrSignaling({ relays: ["ws://mock/foreign"], wsCtor: FAKE_WS });
+      const publisher = new NostrSignaling({ relays: ["ws://mock/foreign"], wsCtor: FAKE_WS });
+      try {
+        const room = newRoomId();
+        const probe = newPeerId();
+        const inbox: SignalingMessage[] = [];
+        subscriber.subscribe(room, (m) => inbox.push(m));
+        await new Promise((r) => setTimeout(r, 5));
+        // Foreign-kind first — would arrive before the real event if the
+        // adapter's `handleEvent` failed to filter on kind.
+        relay.injectForeignKind(
+          room,
+          JSON.stringify({ kind: "offer", from: newPeerId(), sdp: "x" }),
+        );
+        await publisher.publish(room, offer(probe));
+        // Wait for the real event to land. Mock matches by #t, so the
+        // relay's REQ filter alone wouldn't drop kind 1; the adapter's
+        // `handleEvent` MUST filter on event.kind. (See
+        // `packages/signaling-nostr/src/index.ts` `handleEvent`'s early
+        // return when `event.kind !== SENN_NOSTR_KIND`.)
+        await waitFor(() =>
+          inbox.some((m) => m.kind === "offer" && m.from === probe) ? true : undefined,
+        );
+        if (inbox.length === 1 && inbox[0]?.kind === "offer" && inbox[0].from === probe) {
+          return { ok: true };
+        }
+        return {
           ok: false,
           detail: `surfaced ${inbox.length} events; expected 1 real offer, got ${JSON.stringify(inbox)}`,
-        });
+        };
+      } finally {
+        await subscriber.close();
+        await publisher.close();
       }
-    } catch (err) {
-      results.push({
-        name: "non-25556 events are dropped",
-        ok: false,
-        detail: (err as Error).message,
-      });
-    } finally {
-      await subscriber.close();
-      await publisher.close();
-    }
-  }
+    }),
+  );
 
   // 4. publish rejects when every relay nacks (spec §"Reconnect
   //    behaviour" 3: "rejects only if every relay either NACKs or
   //    stays disconnected").
-  {
-    FakeWebSocket.reset();
-    class AllNackWS extends EventTarget {
-      static OPEN = 1;
-      static CLOSED = 3;
-      readyState = 0;
-      constructor(_url: string) {
-        super();
-        queueMicrotask(() => {
-          this.readyState = AllNackWS.OPEN;
-          this.dispatchEvent(new Event("open"));
-        });
-      }
-      send(raw: string): void {
-        let frame: unknown;
-        try {
-          frame = JSON.parse(raw);
-        } catch {
-          return;
+  results.push(
+    await runCheck("publish rejects when every relay nacks", async () => {
+      FakeWebSocket.reset();
+      class AllNackWS extends EventTarget {
+        static OPEN = 1;
+        static CLOSED = 3;
+        readyState = 0;
+        constructor(_url: string) {
+          super();
+          queueMicrotask(() => {
+            this.readyState = AllNackWS.OPEN;
+            this.dispatchEvent(new Event("open"));
+          });
         }
-        if (!Array.isArray(frame) || frame[0] !== "EVENT") return;
-        const event = frame[1] as { id: string };
-        queueMicrotask(() => {
-          this.dispatchEvent(
-            new MessageEvent("message", {
-              data: JSON.stringify(["OK", event.id, false, "rate-limited"]),
-            }),
-          );
-        });
+        send(raw: string): void {
+          let frame: unknown;
+          try {
+            frame = JSON.parse(raw);
+          } catch {
+            return;
+          }
+          if (!Array.isArray(frame) || frame[0] !== "EVENT") return;
+          const event = frame[1] as { id: string };
+          queueMicrotask(() => {
+            this.dispatchEvent(
+              new MessageEvent("message", {
+                data: JSON.stringify(["OK", event.id, false, "rate-limited"]),
+              }),
+            );
+          });
+        }
+        close(): void {
+          if (this.readyState === AllNackWS.CLOSED) return;
+          this.readyState = AllNackWS.CLOSED;
+          this.dispatchEvent(new Event("close"));
+        }
       }
-      close(): void {
-        if (this.readyState === AllNackWS.CLOSED) return;
-        this.readyState = AllNackWS.CLOSED;
-        this.dispatchEvent(new Event("close"));
-      }
-    }
-    const tx = new NostrSignaling({
-      relays: ["ws://nack/a", "ws://nack/b"],
-      wsCtor: AllNackWS as unknown as typeof WebSocket,
-      publishTimeoutMs: 500,
-    });
-    try {
-      let failed = false;
-      let rejection = "";
+      const tx = new NostrSignaling({
+        relays: ["ws://nack/a", "ws://nack/b"],
+        wsCtor: AllNackWS as unknown as typeof WebSocket,
+        publishTimeoutMs: 500,
+      });
       try {
-        await tx.publish(newRoomId(), offer(newPeerId()));
-      } catch (err) {
-        failed = true;
-        rejection = (err as Error).message;
-      }
-      if (failed && /rate-limited/.test(rejection)) {
-        results.push({ name: "publish rejects when every relay nacks", ok: true });
-      } else if (failed) {
-        results.push({
-          name: "publish rejects when every relay nacks",
+        let rejection: string | null = null;
+        try {
+          await tx.publish(newRoomId(), offer(newPeerId()));
+        } catch (err) {
+          rejection = (err as Error).message;
+        }
+        if (rejection === null) return { ok: false, detail: "publish unexpectedly resolved" };
+        if (/rate-limited/.test(rejection)) return { ok: true };
+        return {
           ok: false,
           detail: `rejected, but message did not surface relay reason: ${rejection}`,
-        });
-      } else {
-        results.push({
-          name: "publish rejects when every relay nacks",
-          ok: false,
-          detail: "publish unexpectedly resolved",
-        });
+        };
+      } finally {
+        await tx.close();
       }
-    } finally {
-      await tx.close();
-    }
-  }
+    }),
+  );
 
   // 5. Each NostrSignaling construction uses a fresh ephemeral keypair
   //    (spec §"Normative checklist" 4: "MUST be ephemeral by default").
-  {
-    FakeWebSocket.reset();
-    const relay = new MockRelay("ephemeral");
-    FakeWebSocket.bindRelay("ws://mock/ephemeral", relay);
-    const a = new NostrSignaling({ relays: ["ws://mock/ephemeral"], wsCtor: FAKE_WS });
-    const b = new NostrSignaling({ relays: ["ws://mock/ephemeral"], wsCtor: FAKE_WS });
-    try {
-      if (
-        a.publicKey !== b.publicKey &&
-        /^[0-9a-f]{64}$/.test(a.publicKey) &&
-        /^[0-9a-f]{64}$/.test(b.publicKey)
-      ) {
-        results.push({ name: "ephemeral keypair per construction", ok: true });
-      } else {
-        results.push({
-          name: "ephemeral keypair per construction",
-          ok: false,
-          detail: `keys: ${a.publicKey} vs ${b.publicKey}`,
-        });
+  results.push(
+    await runCheck("ephemeral keypair per construction", async () => {
+      FakeWebSocket.reset();
+      const relay = new MockRelay("ephemeral");
+      FakeWebSocket.bindRelay("ws://mock/ephemeral", relay);
+      const a = new NostrSignaling({ relays: ["ws://mock/ephemeral"], wsCtor: FAKE_WS });
+      const b = new NostrSignaling({ relays: ["ws://mock/ephemeral"], wsCtor: FAKE_WS });
+      try {
+        if (
+          a.publicKey !== b.publicKey &&
+          /^[0-9a-f]{64}$/.test(a.publicKey) &&
+          /^[0-9a-f]{64}$/.test(b.publicKey)
+        ) {
+          return { ok: true };
+        }
+        return { ok: false, detail: `keys: ${a.publicKey} vs ${b.publicKey}` };
+      } finally {
+        await a.close();
+        await b.close();
       }
-    } finally {
-      await a.close();
-      await b.close();
-    }
-  }
+    }),
+  );
 
   return results;
 }
