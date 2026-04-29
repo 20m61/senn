@@ -91,8 +91,10 @@ ADR-0020) and signed under the official trust root:
 - ✅ Gallery — `apps/addon-gallery/` (ADR-0016) with v3 registry
   surfaces, host-neutral static deploy
 - ✅ Community submission flow — registry v3 schema (ADR-0020 §2)
-  defines the submission envelope; reception UI is 🟡 (schema lands
-  before UI, by design)
+  defines the submission envelope; the gallery's
+  `<section id="submissions">` renders any configured URL whose body
+  parses as a `senn-publisher-submissions` document, with status
+  badge, contact, statusReason, notes, and manifest/signature anchors
 
 ## Phase 6: Local-first operations ✅
 
