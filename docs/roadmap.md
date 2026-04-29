@@ -91,8 +91,10 @@ ADR-0020) and signed under the official trust root:
 - ✅ Gallery — `apps/addon-gallery/` (ADR-0016) with v3 registry
   surfaces, host-neutral static deploy
 - ✅ Community submission flow — registry v3 schema (ADR-0020 §2)
-  defines the submission envelope; reception UI is 🟡 (schema lands
-  before UI, by design)
+  defines the submission envelope; the gallery's
+  `<section id="submissions">` renders any configured URL whose body
+  parses as a `senn-publisher-submissions` document, with status
+  badge, contact, statusReason, notes, and manifest/signature anchors
 
 ## Phase 6: Local-first operations ✅
 
@@ -131,9 +133,13 @@ indicative, not committed:
 - ✅ ~~**`pnpm verify:http-poll-endpoint` self-test**~~ — shipped as
   `pnpm verify:http-poll-self-test` (in `pnpm conformance`); spawns
   the Node reference server in-process and runs the same probe
-  operators run against deployed endpoints. A Nostr-side equivalent
-  is now the remaining smoke-script gap (tracked in
-  `docs/signaling-nostr-spec.md` Conformance section).
+  operators run against deployed endpoints.
+- ✅ ~~**Nostr-side smoke-script**~~ — shipped as
+  `pnpm verify:nostr-self-test` (in `pnpm conformance`); injects an
+  in-process NIP-01 mock relay via the adapter's `wsCtor` and runs
+  each MUST clause from `docs/signaling-nostr-spec.md` as a named
+  CLI check. A real-relay variant is intentionally out of scope to
+  preserve vendor-neutrality (ADR-0007).
 - 📌 **N>2 multi-party media** (ADR-0015 §"Out of scope") — explicit
   deferral; revisit when a concrete use case lands.
 - 📌 **Backpressure / flow control on binary transfer** (ADR-0011 §6)

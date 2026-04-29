@@ -5,14 +5,14 @@
 Implemented (2026-04-26). Schema accepted in this ADR; implementation
 landed across commits `38db86d` (validators), `7a1229e` (registry
 bump to v3), `f1ef3b4` (gallery v3 surface), and `ab5084b` (audit
-backfill + submissions validators + Pages deploy). Validators ship in
+backfill + submissions UI). Validators ship in
 `scripts/lib/registry-schema.ts` (covered by `pnpm test:registry-schema`);
-the addon-gallery renders v3 fields (`audit` badge, `history` details,
-meta-index `endorsedBy` chips); the official registry uses v3
-(`addons/official/index.json` v=3, with a self-attestation `audit` block
-on `dev.senn.whiteboard` as the worked example). The submissions surface
-(§2) is validator-only — the gallery does not render it yet because no
-publisher ships `submissions/index.json` today.
+the addon-gallery renders every v3 surface (`audit` badge, `history`
+details, meta-index `endorsedBy` chips, and the dedicated
+`<section id="submissions">` for `senn-publisher-submissions` documents
+— see `apps/addon-gallery/src/main.ts` `renderSubmissions`); the
+official registry uses v3 (`addons/official/index.json` v=3, with a
+self-attestation `audit` block on every published add-on).
 
 ## Context
 
