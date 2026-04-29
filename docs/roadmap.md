@@ -109,11 +109,14 @@ remove every CI/CD vendor dependency from the canonical repo.
   cannot land code that fails the contract
 - ✅ Static deploy is host-neutral (`pnpm stage:gallery-static`,
   `GALLERY_BASE` env) — no GitHub Pages dependency
-- 🟡 Vendor-neutral provenance (ADR-0023) — Proposed; opt-in
-  cosign / minisign / GPG signature alongside the npm tarball,
-  published to GitHub Releases (or any mirror). Activates per
-  release once the maintainer chooses a signing tool and updates
-  `docs/governance.md` with the fingerprint.
+- 🟡 Vendor-neutral provenance (ADR-0023) — Proposed; the opt-in
+  scaffold ships in `scripts/publish-addon-sdk.sh` (env-gated
+  cosign / minisign / GPG), `docs/governance.md` (Release signing
+  identities table), and `docs/dev/release.md` (env contract).
+  Activates per release once the maintainer picks a tool, fills the
+  governance table, and runs `SENN_SIGN_RELEASE=<tool>
+  pnpm release:addon-sdk <tag>`. ADR stays Proposed until the
+  first signed release demonstrates the verify path end-to-end.
 
 ## In flight (deferred items the next phase will pick up)
 

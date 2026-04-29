@@ -123,6 +123,88 @@ pnpm publish --tag "$DIST_TAG" --access public --no-git-checks
 
 echo
 echo "published @senn/addon-sdk@$VERSION (dist-tag: $DIST_TAG)"
+
+# 9. Optional: vendor-neutral provenance (ADR-0023).
+#    Off by default — the publish flow stays vendor-neutral and
+#    zero-dependency. Activated per release by:
+#
+#      SENN_SIGN_RELEASE = cosign | minisign | gpg
+#      SENN_SIGN_KEY     = path to the signing key (cosign / minisign)
+#                          OR gpg key id / fingerprint
+#      SENN_SIGN_PUBKEY  = (minisign only) path to the maintainer's
+#                          public-key file, copied into the .cert slot
+#                          so the artefact set has the same shape
+#                          across tools
+#
+#    The script stages three files under dist/release/ (gitignored):
+#      senn-addon-sdk-<v>.tgz   identical bytes to the npm tarball
+#      senn-addon-sdk-<v>.tgz.sig   detached signature
+#      senn-addon-sdk-<v>.tgz.cert  cosign cert / minisign pubkey / gpg public key
+#    The maintainer uploads them to the GitHub Release for $TAG and
+#    confirms the fingerprint against
+#    docs/governance.md "Release signing identities".
+SIGN_TOOL="${SENN_SIGN_RELEASE:-}"
+if [[ -n "$SIGN_TOOL" ]]; then
+  SIGN_KEY="${SENN_SIGN_KEY:-}"
+  if [[ -z "$SIGN_KEY" ]]; then
+    echo "error: SENN_SIGN_RELEASE='$SIGN_TOOL' set but SENN_SIGN_KEY is empty" >&2
+    exit 1
+  fi
+
+  STAGE="$REPO_ROOT/dist/release"
+  mkdir -p "$STAGE"
+  ARTEFACT="$STAGE/senn-addon-sdk-$VERSION.tgz"
+  SIG="$ARTEFACT.sig"
+  CERT="$ARTEFACT.cert"
+  cp "$REPO_ROOT/packages/addon-sdk/$TARBALL" "$ARTEFACT"
+
+  case "$SIGN_TOOL" in
+    cosign)
+      command -v cosign >/dev/null || { echo "error: cosign not on PATH" >&2; exit 1; }
+      echo "==> cosign sign-blob (key: $SIGN_KEY)"
+      cosign sign-blob --yes \
+        --key "$SIGN_KEY" \
+        --output-signature "$SIG" \
+        --output-certificate "$CERT" \
+        "$ARTEFACT"
+      ;;
+    minisign)
+      command -v minisign >/dev/null || { echo "error: minisign not on PATH" >&2; exit 1; }
+      echo "==> minisign -S (secret: $SIGN_KEY)"
+      minisign -S -s "$SIGN_KEY" -m "$ARTEFACT" -x "$SIG"
+      if [[ -n "${SENN_SIGN_PUBKEY:-}" && -f "$SENN_SIGN_PUBKEY" ]]; then
+        cp "$SENN_SIGN_PUBKEY" "$CERT"
+      else
+        echo "warn: SENN_SIGN_PUBKEY not set or not a file; .cert slot left empty." >&2
+        echo "      Upload the maintainer's minisign public key alongside the .sig" >&2
+        echo "      manually so verifiers have a complete artefact set." >&2
+      fi
+      ;;
+    gpg)
+      command -v gpg >/dev/null || { echo "error: gpg not on PATH" >&2; exit 1; }
+      echo "==> gpg --detach-sign --armor (signer: $SIGN_KEY)"
+      gpg --batch --yes --local-user "$SIGN_KEY" \
+        --detach-sign --armor --output "$SIG" "$ARTEFACT"
+      gpg --batch --yes --export --armor "$SIGN_KEY" >"$CERT"
+      ;;
+    *)
+      echo "error: SENN_SIGN_RELEASE='$SIGN_TOOL' must be one of cosign|minisign|gpg" >&2
+      exit 1
+      ;;
+  esac
+
+  echo
+  echo "ADR-0023 provenance artefacts staged at $STAGE/:"
+  ls -la "$STAGE/"
+  echo
+  echo "next (provenance):"
+  echo "  - upload $(basename "$ARTEFACT"), $(basename "$SIG"), and $(basename "$CERT")"
+  echo "    to the GitHub Release for tag '$TAG'"
+  echo "  - cross-check the signing identity against"
+  echo "    docs/governance.md 'Release signing identities'"
+fi
+
+echo
 echo "next steps:"
 echo "  - git push origin '$TAG'"
 echo "  - update docs/dev/release.md changelog"
