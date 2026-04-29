@@ -19,7 +19,8 @@ Security is provided through:
 - Local storage boundaries
 - User-controlled persistence
 - Static add-on distribution
-- Optional signature verification
+- Manifest signature verification with three host-selectable modes
+  (`none` / `optional` / `required`; ADR-0008 §6)
 
 ## Trust Boundaries
 
@@ -90,10 +91,41 @@ Security is provided through:
 
 ### Distribution Security
 
-- Verified add-ons are signed.
-- Hashes are checked.
-- Versions are tracked.
-- Rollbacks are supported.
+The trust chain for add-ons that ship through a SENN registry:
+
+- **Per-add-on manifest signing.** Every signed publisher ships a
+  detached `manifest.sig.json` next to `manifest.json`
+  ([ADR-0008](adr/0008-manifest-signing.md);
+  [addon-signing-spec.md](addon-signing-spec.md)). Signatures are
+  Ed25519 over the canonical manifest bytes. The host SHALL select
+  one of three verify modes:
+  - `none` — accept unsigned manifests; intended for local development.
+  - `optional` — accept any manifest, but a missing or invalid
+    signature surfaces a UI badge.
+  - `required` — refuse to load any manifest without a valid
+    signature against a registry-pinned key.
+- **Registry-pinned trust root.** Registries enumerate the public
+  keys (`trustedKeys`) used to sign add-ons under their namespace.
+  Schema v3 (registry index format) covers version histories,
+  audits, and the publisher submission envelope
+  ([ADR-0017](adr/0017-registry-schema-v2.md);
+  [ADR-0020](adr/0020-registry-schema-v3.md)).
+- **Key rotation with overlap window.** A registry MAY publish more
+  than one trusted key at a time. The rotation procedure announces
+  the new key in the registry ahead of cutover, signs at least one
+  release with both keys to give downstream verifiers a window to
+  refresh their cache, then closes the old key
+  ([ADR-0010](adr/0010-key-rotation.md)). Emergency rotation drops
+  the old key immediately and SHOULD be paired with a published
+  incident note.
+- **Version monotonicity.** Manifest schema requires `version` to
+  strictly increase over previously published versions for the same
+  `id` ([addon-manifest.md §Validation rules](addon-manifest.md));
+  registries reject downgrades and yanked-version installs.
+- **Rollback via deprecate, not unpublish.** Hard removal of a
+  published version is not in the trust model. Bad releases are
+  flagged with a deprecation message via the registry; existing
+  lockfiles continue to resolve, and new consumers see a warning.
 
 ## Threats vs. signaling / TURN operators
 
