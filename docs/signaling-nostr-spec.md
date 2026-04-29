@@ -339,4 +339,4 @@ the adapter with an external NIP-01 probe of their choosing.
 - [room-and-invite-spec.md](room-and-invite-spec.md) §RoomId — seeds the v2 HKDF derivation.
 - [signaling-http-poll-spec.md](signaling-http-poll-spec.md)
 - [security-model.md](security-model.md)
-- [NIP-44 (XChaCha20-Poly1305 + HKDF-SHA256)](https://github.com/nostr-protocol/nips/blob/master/44.md) — normative reference for the v2 cipher envelope.
+- [NIP-44 (ChaCha20 + HMAC-SHA256 + HKDF-SHA256, encrypt-then-MAC)](https://github.com/nostr-protocol/nips/blob/master/44.md) — normative reference for the v2 cipher envelope.

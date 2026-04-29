@@ -56,7 +56,8 @@ per-identity authenticated key exchange are explicitly out of scope (see
 
 ## Decision
 
-Adopt NIP-44 v2 (XChaCha20-Poly1305 with HKDF-SHA256 per the NIP-44
+Adopt NIP-44 v2 (ChaCha20 + HMAC-SHA256 in encrypt-then-MAC
+composition, with HKDF-SHA256 key derivation, per the NIP-44
 specification at https://github.com/nostr-protocol/nips/blob/master/44.md)
 as the OPTIONAL v2 content cipher for kind-25556 events in the
 `@senn/signaling-nostr` adapter, keyed off a room-derived symmetric secret,
@@ -69,11 +70,14 @@ Specifically:
 ### 1. Cipher: NIP-44 v2
 
 The v2 content cipher is NIP-44 v2 exactly as the NIP-44 specification
-defines it: XChaCha20-Poly1305 authenticated encryption, with HKDF-SHA256
-key derivation applied to the conversation key. Implementations MUST NOT use
-the deprecated NIP-44 v1 variant. The NIP-44 ciphertext envelope is base64
-standard-encoded and placed directly in the Nostr event's `content` field,
-replacing the v1 JSON string.
+defines it: ChaCha20 (12-byte nonce, the standardised variant — not
+XChaCha20) for the encrypted payload, with HMAC-SHA256 over the
+ciphertext as the authentication tag in encrypt-then-MAC composition,
+and HKDF-SHA256 applied to the conversation key for per-message
+sub-key derivation. Implementations MUST NOT use the deprecated
+NIP-44 v1 variant. The NIP-44 ciphertext envelope (`version || nonce
+|| ciphertext || mac`, base64 standard-encoded) is placed directly in
+the Nostr event's `content` field, replacing the v1 JSON string.
 
 ### 2. Room key derivation
 
@@ -228,7 +232,10 @@ this ADR:
 
 - **Why NIP-44 v2.** NIP-44 v2 is the only standardised Nostr content
   cipher: it is well-specified, widely implemented in Nostr libraries, and
-  uses conservative primitives (XChaCha20-Poly1305 + HKDF-SHA256). Using a
+  uses conservative primitives (ChaCha20 + HMAC-SHA256 + HKDF-SHA256;
+  ChaCha is preferred over XChaCha because the latter is not
+  standardised, and HMAC-SHA256 over Poly1305 because polynomial MACs
+  are easier to forge under nonce reuse). Using a
   SENN-custom cipher would raise the implementation burden without improving
   the security properties relevant to this threat model.
 - **Why HKDF over the roomId rather than a separate key exchange.** The
@@ -320,4 +327,4 @@ this ADR:
 - Spec: [docs/signaling-nostr-spec.md](../signaling-nostr-spec.md) — normative wire shape; must be updated to reflect v2 content encoding.
 - Spec: [docs/room-and-invite-spec.md](../room-and-invite-spec.md) §RoomId — the `roomId` that seeds the §2 HKDF derivation.
 - Spec: [docs/security-model.md](../security-model.md) — threat model the symmetric key scope claim is grounded in.
-- NIP-44: https://github.com/nostr-protocol/nips/blob/master/44.md — normative reference for the XChaCha20-Poly1305 + HKDF-SHA256 cipher.
+- NIP-44: https://github.com/nostr-protocol/nips/blob/master/44.md — normative reference for the ChaCha20 + HMAC-SHA256 + HKDF-SHA256 cipher (encrypt-then-MAC).
