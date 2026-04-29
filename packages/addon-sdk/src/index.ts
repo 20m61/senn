@@ -1,5 +1,5 @@
 /**
- * Public TypeScript surface for `@senn/addon-sdk`.
+ * Public TypeScript surface for `@sennjs/addon-sdk`.
  *
  * The runtime ships as a hand-written classic script
  * (`runtime/senn-addon-sdk.js`) that is copied into each add-on

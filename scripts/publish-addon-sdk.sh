@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# publish-addon-sdk.sh — local-first publish for @senn/addon-sdk.
+# publish-addon-sdk.sh — local-first publish for @sennjs/addon-sdk.
+# (Workspace identifier remains @senn/addon-sdk; published name is
+# @sennjs/addon-sdk per ADR-0019 §2 amendment 2026-04-30.)
 #
 # Replaces the prior .github/workflows/publish-addon-sdk.yml (removed by
 # ADR-0022). The maintainer runs this script from a clean checkout of
@@ -54,7 +56,7 @@ HEAD_SHA="$(git rev-parse HEAD)"
 TAG_SHA="$(git rev-parse "refs/tags/$TAG^{commit}" 2>/dev/null || true)"
 if [[ -z "$TAG_SHA" ]]; then
   echo "error: tag '$TAG' does not exist locally — create it first with" >&2
-  echo "       git tag -a '$TAG' -m '@senn/addon-sdk $VERSION'" >&2
+  echo "       git tag -a '$TAG' -m '@sennjs/addon-sdk $VERSION'" >&2
   exit 1
 fi
 if [[ "$HEAD_SHA" != "$TAG_SHA" ]]; then
@@ -151,7 +153,7 @@ fi
 #    live outside this script — `pnpm publish` reads ~/.npmrc.
 echo
 echo "About to publish:"
-echo "  package:  @senn/addon-sdk@$VERSION"
+echo "  package:  @sennjs/addon-sdk@$VERSION"
 echo "  dist-tag: $DIST_TAG"
 echo "  registry: $(npm config get registry)"
 echo "  user:     $(npm whoami 2>/dev/null || echo '<not logged in — npm publish will fail>')"
@@ -171,7 +173,7 @@ echo "==> pnpm publish --tag $DIST_TAG --access public --no-git-checks"
 pnpm publish --tag "$DIST_TAG" --access public --no-git-checks
 
 echo
-echo "published @senn/addon-sdk@$VERSION (dist-tag: $DIST_TAG)"
+echo "published @sennjs/addon-sdk@$VERSION (dist-tag: $DIST_TAG)"
 
 # 10. Optional: vendor-neutral provenance (ADR-0023).
 #    Off by default — the publish flow stays vendor-neutral and

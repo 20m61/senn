@@ -9,6 +9,13 @@ publish *flow*; this ADR adds an OPTIONAL, vendor-neutral provenance
 artefact that downstream consumers can verify without trusting any CI
 runner.
 
+> **Scope rename note (2026-04-30):** the package is now published on
+> npm as `@sennjs/addon-sdk` per [ADR-0019 §2 amendment](0019-publish-pipeline.md).
+> Wherever this ADR cites `@senn/addon-sdk@<semver>` consumer commands
+> (`npm pack`, registry URL), substitute `@sennjs/addon-sdk@<semver>`.
+> The integrity story (sigstore-attached `.sig`/`.cert` artefacts on
+> the GitHub Release) is unchanged; only the registry name flipped.
+
 ## Context
 
 ADR-0022 moved the npm publish flow off GitHub Actions and onto a
@@ -107,8 +114,8 @@ not depend on GitHub serving them.
 A downstream that wants to verify a published `@senn/addon-sdk`
 tarball follows this path:
 
-1. `npm pack @senn/addon-sdk@<semver>` (or download from
-   https://registry.npmjs.org/@senn/addon-sdk/-/addon-sdk-<semver>.tgz).
+1. `npm pack @sennjs/addon-sdk@<semver>` (or download from
+   https://registry.npmjs.org/@sennjs/addon-sdk/-/addon-sdk-<semver>.tgz).
 2. Compute the local SHA-256 of the tarball bytes.
 3. Download the matching `senn-addon-sdk-<semver>.tgz` from the
    GitHub Release for `addon-sdk-v<semver>`, compute its SHA-256, and

@@ -11,6 +11,12 @@ entry, removal of `.github/workflows/`, removal of
 `publishConfig.provenance` from `packages/addon-sdk/package.json`, and
 the renamed `scripts/stage-gallery-static.ts`.
 
+> **Scope rename note (2026-04-30):** wherever this ADR refers to the
+> SDK as `@senn/addon-sdk`, the published npm name is now
+> `@sennjs/addon-sdk` per [ADR-0019 §2 amendment](0019-publish-pipeline.md).
+> The release script and tag namespace (`addon-sdk-v<semver>`) are
+> unchanged; only the npm scope flipped.
+
 ## Context
 
 ADR-0021 established that the **conformance** contract is local: the

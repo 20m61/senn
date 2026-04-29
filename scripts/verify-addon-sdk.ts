@@ -155,8 +155,8 @@ function expectExportEntry(
 
 async function checkPackageJson(): Promise<void> {
   const pkg = JSON.parse(await readFile(PACKAGE_JSON, "utf8")) as PackageJson;
-  if (pkg.name !== "@senn/addon-sdk") {
-    fail(`package.json name = ${JSON.stringify(pkg.name)}, expected "@senn/addon-sdk"`);
+  if (pkg.name !== "@sennjs/addon-sdk") {
+    fail(`package.json name = ${JSON.stringify(pkg.name)}, expected "@sennjs/addon-sdk"`);
   }
   if (pkg.main !== "./dist/index.js") {
     fail(`package.json main = ${JSON.stringify(pkg.main)}, expected "./dist/index.js"`);

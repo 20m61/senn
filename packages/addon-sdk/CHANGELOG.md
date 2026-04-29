@@ -1,8 +1,14 @@
-# `@senn/addon-sdk` Changelog
+# `@sennjs/addon-sdk` Changelog
 
-All notable changes to the `@senn/addon-sdk` npm package are recorded
+All notable changes to the `@sennjs/addon-sdk` npm package are recorded
 here. The package follows [SemVer 2.0.0](https://semver.org/) per
 [ADR-0019 §3](../../docs/adr/0019-publish-pipeline.md).
+
+> **Scope note (2026-04-30):** the package is published as
+> `@sennjs/addon-sdk`, not `@senn/addon-sdk`. The `@senn` npm
+> organisation is registered to an unrelated account and cannot be
+> reassigned without a trademark dispute, so the project moved to
+> `@sennjs` per ADR-0019 §2.
 
 The release flow itself is documented in
 [`docs/dev/release.md`](../../docs/dev/release.md) and is governed by
@@ -12,7 +18,8 @@ first, no CI vendor dependency).
 ## 0.1.0 — 2026-04-27
 
 Initial public release. Establishes the package shape pinned by
-ADR-0018 and the version policy of ADR-0019.
+ADR-0018 and the version policy of ADR-0019. Renamed to
+`@sennjs/addon-sdk` before first publish (see scope note above).
 
 ### Public surface
 
@@ -30,7 +37,8 @@ ADR-0018 and the version policy of ADR-0019.
 
 - `private: true` removed; `version` bumped from `0.0.0` to `0.1.0`.
 - Stale `@senn/protocol` `workspace:*` dependency removed — the SDK
-  source has not imported from `@senn/protocol` since the type
+  source has not imported from `@senn/protocol` (a workspace-internal
+  package, unrelated to the published scope rename) since the type
   surface was self-contained in ADR-0018, and shipping the
   `workspace:*` reference would have produced a tarball that could
   not resolve its dependencies on registry consumers.
@@ -43,9 +51,9 @@ ADR-0018 and the version policy of ADR-0019.
 ### Install
 
 ```sh
-pnpm add -D @senn/addon-sdk
+pnpm add -D @sennjs/addon-sdk
 # or
-npm install --save-dev @senn/addon-sdk
+npm install --save-dev @sennjs/addon-sdk
 ```
 
 ### Release procedure

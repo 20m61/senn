@@ -61,9 +61,10 @@ provider. The project's correctness contract is enforced **locally**:
   [ADR-0021](docs/adr/0021-local-first-conformance.md) and
   [docs/dev/conformance.md](docs/dev/conformance.md).)
 - **Release**: `pnpm release:addon-sdk <tag>`
-  (`scripts/publish-addon-sdk.sh`) publishes `@senn/addon-sdk` from a
-  maintainer machine — no GitHub Actions workflow, no `NPM_TOKEN`
-  secret on the repository. (See
+  (`scripts/publish-addon-sdk.sh`) publishes `@sennjs/addon-sdk` (the
+  workspace package whose internal identifier is `@senn/addon-sdk`)
+  from a maintainer machine — no GitHub Actions workflow, no
+  `NPM_TOKEN` secret on the repository. (See
   [ADR-0022](docs/adr/0022-local-first-publish-pipeline.md) and
   [docs/dev/release.md](docs/dev/release.md).)
 - **Static deploy**: `pnpm build` + `pnpm stage:gallery-static`
@@ -138,14 +139,15 @@ public release. The wire layer is implemented end-to-end:
   (gzip 24 KB) JS bundle plus addon assets, deployable to any static
   host (see `docs/deployment.md`).
 
-> **`@senn/addon-sdk` 0.1.0 — pending npm publication.** The release
-> is prepared on `develop` (`packages/addon-sdk/package.json#version`
-> = `0.1.0`, `private:false`, ADR-0018 surface frozen) and the
-> `pnpm release:addon-sdk` flow is verified end-to-end. The first
-> publish to the public registry is held while the `@senn` npm scope
-> is being provisioned (npm anti-fraud holds new accounts ~7 days
-> before allowing org creation; support ticket open). Until then,
-> external authors install via `pnpm pack` per
+> **`@sennjs/addon-sdk` 0.1.0 — pending first npm publish.** The
+> release is prepared on `develop` (`packages/addon-sdk/package.json#name`
+> = `@sennjs/addon-sdk`, `version` = `0.1.0`, `private:false`,
+> ADR-0018 surface frozen) and the `pnpm release:addon-sdk` flow is
+> verified end-to-end. The first publish was originally targeted at
+> `@senn/addon-sdk`; npm support confirmed on 2026-04-29 that `@senn`
+> is registered to an unrelated account and cannot be reassigned, so
+> the project moved to `@sennjs` (created 2026-04-30). Until the
+> first publish lands, external authors install via `pnpm pack` per
 > [`docs/dev/writing-an-addon.md`](docs/dev/writing-an-addon.md)
 > §"Trying the SDK from an external project (pre-publish)".
 

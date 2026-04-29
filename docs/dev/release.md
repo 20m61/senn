@@ -78,11 +78,13 @@ Each add-on under `addons/official/*` releases independently with its own
 SemVer. The release process is the same pre-flight + manifest validator,
 but no workspace-wide version bump is involved.
 
-## `@senn/addon-sdk` releases (ADR-0019 + ADR-0022)
+## `@sennjs/addon-sdk` releases (ADR-0019 + ADR-0022)
 
-The SDK publishes to public npm under the `@senn` scope on its own
-cadence, independent of the host-application release train. Tag namespace
-is `addon-sdk-v<semver>` so future publishable packages can co-exist.
+The SDK publishes to public npm under the `@sennjs` scope (workspace
+identifier remains `@senn/addon-sdk`; ADR-0019 §2 amendment 2026-04-30
+records the rename rationale). Releases run on their own cadence,
+independent of the host-application release train. Tag namespace is
+`addon-sdk-v<semver>` so future publishable packages can co-exist.
 
 ADR-0022 supersedes ADR-0019 §5: the publish flow runs **locally** from a
 maintainer machine, not from a CI vendor. The maintainer is the trust
@@ -98,8 +100,8 @@ only credentials in play.
   that adds the surface change.
 - `pnpm conformance` passes locally on the tagged commit. The publish
   script re-runs it, so a stale checkout cannot publish.
-- `npm whoami` shows an account that owns `@senn/addon-sdk` on npmjs.com,
-  with 2FA enabled.
+- `npm whoami` shows an account that owns `@sennjs/addon-sdk` on
+  npmjs.com (i.e., is a member of the `sennjs` org), with 2FA enabled.
 
 ### Tag and publish
 
@@ -108,7 +110,7 @@ After the version-bump PR merges to `main`:
 ```sh
 git switch main
 git pull --ff-only
-git tag -a "addon-sdk-v0.1.0" -m "@senn/addon-sdk 0.1.0"
+git tag -a "addon-sdk-v0.1.0" -m "@sennjs/addon-sdk 0.1.0"
 git checkout "addon-sdk-v0.1.0"
 
 # This runs the local publish gate end-to-end:
@@ -204,7 +206,7 @@ the two integrity surfaces from the previous section.
 For accidental or broken releases, use `npm deprecate`:
 
 ```sh
-npm deprecate "@senn/addon-sdk@0.1.0" "broken release; use 0.1.1"
+npm deprecate "@sennjs/addon-sdk@0.1.0" "broken release; use 0.1.1"
 ```
 
 This keeps the tarball resolvable (so existing lockfiles still install)
@@ -214,7 +216,7 @@ goes via the registry, not via the SDK.
 ### Troubleshooting (publish-time pitfalls captured during 0.1.0 prep)
 
 The first publish surfaced several gotchas worth recording so future
-maintainers — or anyone setting up `@senn/addon-sdk` from a fresh
+maintainers — or anyone setting up `@sennjs/addon-sdk` from a fresh
 maintainer machine — do not have to rediscover them.
 
 #### `npm login` fails on WSL2 with `sensible-browser` error
@@ -264,13 +266,13 @@ Fix: revoke the token, generate a new Granular Access Token, and
 **explicitly check** the "Allow this token to bypass two-factor
 authentication" box. Update `~/.npmrc` with the new token.
 
-#### `pnpm publish` returns `404 PUT https://registry.npmjs.org/@senn%2faddon-sdk`
+#### `pnpm publish` returns `404 PUT https://registry.npmjs.org/@sennjs%2faddon-sdk`
 
 Symptom:
 
 ```
-npm error 404 The requested resource '@senn/addon-sdk@0.1.0' could not
-be found or you do not have permission to access it.
+npm error 404 The requested resource '@sennjs/addon-sdk@0.1.0' could
+not be found or you do not have permission to access it.
 ```
 
 Most likely causes (in order of frequency):

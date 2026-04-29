@@ -8,6 +8,11 @@ publication path, and verification protocol. This ADR concretises the one
 choice ADR-0023 deliberately left open: which signing tool the maintainer uses
 by default for the first signed `@senn/addon-sdk` release.
 
+> **Scope rename note (2026-04-30):** the published npm name is now
+> `@sennjs/addon-sdk` per [ADR-0019 §2 amendment](0019-publish-pipeline.md).
+> The signing-tool decision in this ADR is registry-name-agnostic; the
+> tarball it signs is the same regardless of the npm scope.
+
 This ADR transitions to **Implemented** when the maintainer ships the first
 signed release **and** fills in the `docs/governance.md` "Release signing
 identities" table row — the same activation gate ADR-0023 sets for its own

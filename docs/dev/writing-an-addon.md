@@ -78,8 +78,9 @@ Inside the sandboxed iframe the add-on uses two surfaces:
    prohibits all network requests; `script-src 'self'` prohibits inline JS
    and remote modules.
 2. The Core add-on bridge, accessed via `postMessage` to `window.parent`.
-   The `@senn/addon-sdk` runtime ships a classic script that exposes a
-   single `window.senn` global; the add-on loads it before its own code.
+   The `@sennjs/addon-sdk` runtime (workspace identifier
+   `@senn/addon-sdk`) ships a classic script that exposes a single
+   `window.senn` global; the add-on loads it before its own code.
 
 `addon-sdk-spec.md` is the normative shape of `window.senn`. Minimum
 useful surface:
@@ -115,26 +116,26 @@ that the host owns `getUserMedia` and the host-controlled `<audio>` /
 
 ## TypeScript types (RECOMMENDED)
 
-If you author your add-on in TypeScript, depend on `@senn/addon-sdk`
+If you author your add-on in TypeScript, depend on `@sennjs/addon-sdk`
 and let its declarations augment `Window.senn` for you. ADR-0018
 documents the package shape.
 
 ```ts
 // addon.ts — compiled to addon.js, loaded after senn-addon-sdk.js
-/// <reference types="@senn/addon-sdk" />
+/// <reference types="@sennjs/addon-sdk" />
 
 const ctx = await window.senn!.ready();
 window.senn!.peer.send({ kind: "hello", from: ctx.addonId });
 ```
 
-A single `/// <reference types="@senn/addon-sdk" />` directive — or any
-`import` from the package — activates the ambient
+A single `/// <reference types="@sennjs/addon-sdk" />` directive — or
+any `import` from the package — activates the ambient
 `Window.senn?: SennAddonGlobal` declaration. The exported interfaces
 (`SennAddonContext`, `SennDeliverEvent`, `SennAddonStorage`, …) are
 also available for your own helper signatures:
 
 ```ts
-import type { SennDeliverEvent, SennAddonContext } from "@senn/addon-sdk";
+import type { SennDeliverEvent, SennAddonContext } from "@sennjs/addon-sdk";
 
 function onPeerMessage(ev: SennDeliverEvent) { /* … */ }
 function onReady(ctx: SennAddonContext) { /* … */ }
@@ -150,7 +151,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
 copyFileSync(
-  require.resolve("@senn/addon-sdk/runtime/senn-addon-sdk.js"),
+  require.resolve("@sennjs/addon-sdk/runtime/senn-addon-sdk.js"),
   "dist/senn-addon-sdk.js",
 );
 ```
@@ -162,25 +163,29 @@ Add-on `index.html` then loads it as a classic script:
 <script src="addon.js"></script>
 ```
 
-`@senn/addon-sdk` is **prepared for npm publish at version 0.1.0** but
-is **not yet on the public registry**. Inside this repo you depend on it
-via `"@senn/addon-sdk": "workspace:*"`. ADR-0019 owns the public publish
-flow; ADR-0022 governs the local-first publish runner that produces the
-tarball when the registry side is ready.
+`@sennjs/addon-sdk` is **prepared for npm publish at version 0.1.0**
+but is **not yet on the public registry**. Inside this repo you depend
+on it via `"@senn/addon-sdk": "workspace:*"` (the workspace identifier
+remains under the private `@senn` workspace scope; only the published
+npm name is `@sennjs/addon-sdk` per ADR-0019 §2 amendment 2026-04-30).
+ADR-0019 owns the public publish flow; ADR-0022 governs the local-
+first publish runner that produces the tarball when the registry side
+is ready.
 
-> **Why pre-publish?** As of 2026-04-29 the `@senn` org is still being
-> provisioned on npm (anti-fraud hold for new maintainer accounts).
-> Once the scope is granted, `pnpm release:addon-sdk addon-sdk-v0.1.0`
-> ships the tarball that the steps below already produce locally — the
-> bytes are byte-identical, so your `pnpm pack`-based install path
-> survives the registry transition unchanged.
+> **Why `@sennjs` instead of `@senn`?** npm support confirmed on
+> 2026-04-29 that `@senn` is registered to an unrelated account and
+> cannot be reassigned (only path: trademark dispute). The maintainer
+> created `@sennjs` on 2026-04-30. `pnpm release:addon-sdk
+> addon-sdk-v0.1.0` ships the tarball that the steps below produce
+> locally — the bytes are byte-identical, so your `pnpm pack`-based
+> install path survives the registry transition unchanged.
 
 ### Trying the SDK from an external project (pre-publish)
 
-Until `@senn/addon-sdk` ships to npm under the `@senn` scope (ADR-0019
-+ ADR-0022), external authors can still depend on the exact same
-artefacts via `pnpm pack`. This produces a tarball that mirrors what
-the future `pnpm publish` will produce, so the install path you
+Until `@sennjs/addon-sdk` ships to npm under the `@sennjs` scope
+(ADR-0019 + ADR-0022), external authors can still depend on the exact
+same artefacts via `pnpm pack`. This produces a tarball that mirrors
+what the future `pnpm publish` will produce, so the install path you
 exercise today is the install path users will run after publish — no
 rewrite needed.
 
@@ -219,16 +224,16 @@ pnpm add -D file:../senn/packages/addon-sdk/senn-addon-sdk-0.1.0.tgz
 ```
 
 The TypeScript and runtime-copy snippets above work unchanged: the
-`/// <reference types="@senn/addon-sdk" />` directive resolves into
+`/// <reference types="@sennjs/addon-sdk" />` directive resolves into
 `dist/index.d.ts` from the tarball, and
-`require.resolve("@senn/addon-sdk/runtime/senn-addon-sdk.js")` resolves
-into `runtime/senn-addon-sdk.js` from the tarball.
+`require.resolve("@sennjs/addon-sdk/runtime/senn-addon-sdk.js")`
+resolves into `runtime/senn-addon-sdk.js` from the tarball.
 
 When ADR-0019 lands the published package, drop the tarball line and
 switch to:
 
 ```sh
-pnpm add -D @senn/addon-sdk
+pnpm add -D @sennjs/addon-sdk
 ```
 
 No code change is required in `addon.ts` or your build script; the
