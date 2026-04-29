@@ -13,7 +13,7 @@
  *      named check, so a regression in the adapter or the spec mapping
  *      surfaces as a single line in the conformance summary.
  *
- * Fast (~50 ms); included in `pnpm conformance`.
+ * Fast (sub-second); included in `pnpm conformance`.
  *
  * The vitest contract suite under
  * `packages/signaling-nostr/test/contract.test.ts` covers the same
@@ -27,7 +27,7 @@
  * (ADR-0007) means the smoke MUST NOT bake in a default relay.
  */
 
-import { type PeerId, newPeerId, newRoomId } from "../packages/protocol/src/index.js";
+import { type PeerId, type RoomId, newPeerId, newRoomId } from "../packages/protocol/src/index.js";
 import { NostrSignaling, type SignalingMessage } from "../packages/signaling-nostr/src/index.js";
 
 const SENN_NOSTR_KIND = 25556;
@@ -54,10 +54,10 @@ class MockRelay {
     string,
     { readonly sock: FakeWebSocket; readonly filter: NostrFilter }
   >();
-  private readonly id: string;
+  private readonly name: string;
 
-  constructor(id: string) {
-    this.id = id;
+  constructor(name: string) {
+    this.name = name;
   }
 
   handle(sock: FakeWebSocket, raw: string): void {
@@ -93,9 +93,9 @@ class MockRelay {
    * Inject a kind-1 event with the same tag the adapter listens on.
    * The adapter MUST drop it (kind filter on the receive path).
    */
-  injectForeignKind(roomId: string, content: string): void {
+  injectForeignKind(roomId: RoomId, content: string): void {
     const fake: NostrEventLike = {
-      id: `foreign-${this.id}-${this.published.length}`,
+      id: `foreign-${this.name}-${this.published.length}`,
       pubkey: "00".repeat(32),
       kind: 1,
       created_at: Math.floor(Date.now() / 1000),
@@ -186,6 +186,11 @@ function offer(from: PeerId): SignalingMessage {
   return { kind: "offer", from, sdp: "v=0\r\n…" };
 }
 
+function hasSennRoomTag(event: NostrEventLike, roomId: RoomId): boolean {
+  const expectedTag = `${SENN_TAG_PREFIX}${roomId}`;
+  return event.tags.some((t) => t[0] === "t" && t[1] === expectedTag);
+}
+
 async function runChecks(): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
 
@@ -221,11 +226,7 @@ async function runChecks(): Promise<CheckResult[]> {
           ok: false,
           detail: `published kind ${event.kind}, expected ${SENN_NOSTR_KIND}`,
         });
-      } else if (
-        !event.tags.some(
-          (t) => t[0] === "t" && typeof t[1] === "string" && t[1] === `${SENN_TAG_PREFIX}${room}`,
-        )
-      ) {
+      } else if (!hasSennRoomTag(event, room)) {
         results.push({
           name: "publish → subscribe round-trip",
           ok: false,
@@ -306,29 +307,44 @@ async function runChecks(): Promise<CheckResult[]> {
   //    (spec §"Normative checklist" 5: "Every published event MUST be
   //    of kind: 25556" — the receive side has the symmetric obligation
   //    via the REQ filter).
+  //
+  //    Barrier strategy: inject the foreign-kind event first, then
+  //    publish a real kind-25556 event through the same relay and wait
+  //    for it to land in the inbox. The real event acts as a synchronous
+  //    barrier — by the time it arrives, any earlier deliveries have
+  //    already drained through the queueMicrotask chain. This avoids the
+  //    timing fragility of a fixed `setTimeout`-only "absence" assertion.
   {
     FakeWebSocket.reset();
     const relay = new MockRelay("foreign");
     FakeWebSocket.bindRelay("ws://mock/foreign", relay);
-    const tx = new NostrSignaling({ relays: ["ws://mock/foreign"], wsCtor: FAKE_WS });
+    const subscriber = new NostrSignaling({ relays: ["ws://mock/foreign"], wsCtor: FAKE_WS });
+    const publisher = new NostrSignaling({ relays: ["ws://mock/foreign"], wsCtor: FAKE_WS });
     try {
       const room = newRoomId();
+      const probe = newPeerId();
       const inbox: SignalingMessage[] = [];
-      tx.subscribe(room, (m) => inbox.push(m));
+      subscriber.subscribe(room, (m) => inbox.push(m));
       await new Promise((r) => setTimeout(r, 5));
+      // Foreign-kind first — would arrive before the real event if the
+      // adapter's `handleEvent` failed to filter on kind.
       relay.injectForeignKind(room, JSON.stringify({ kind: "offer", from: newPeerId(), sdp: "x" }));
-      await new Promise((r) => setTimeout(r, 30));
-      // Mock matches by #t, so the relay's REQ filter alone wouldn't
-      // drop kind 1; the adapter's `handleEvent` MUST filter on
-      // event.kind. (See `packages/signaling-nostr/src/index.ts`
-      // `handleEvent` early return when `event.kind !== SENN_NOSTR_KIND`.)
-      if (inbox.length === 0) {
+      await publisher.publish(room, offer(probe));
+      // Wait for the real event to land. Mock matches by #t, so the
+      // relay's REQ filter alone wouldn't drop kind 1; the adapter's
+      // `handleEvent` MUST filter on event.kind. (See
+      // `packages/signaling-nostr/src/index.ts` `handleEvent`'s early
+      // return when `event.kind !== SENN_NOSTR_KIND`.)
+      await waitFor(() =>
+        inbox.some((m) => m.kind === "offer" && m.from === probe) ? true : undefined,
+      );
+      if (inbox.length === 1 && inbox[0]?.kind === "offer" && inbox[0].from === probe) {
         results.push({ name: "non-25556 events are dropped", ok: true });
       } else {
         results.push({
           name: "non-25556 events are dropped",
           ok: false,
-          detail: `surfaced ${inbox.length} foreign-kind events`,
+          detail: `surfaced ${inbox.length} events; expected 1 real offer, got ${JSON.stringify(inbox)}`,
         });
       }
     } catch (err) {
@@ -338,7 +354,8 @@ async function runChecks(): Promise<CheckResult[]> {
         detail: (err as Error).message,
       });
     } finally {
-      await tx.close();
+      await subscriber.close();
+      await publisher.close();
     }
   }
 
