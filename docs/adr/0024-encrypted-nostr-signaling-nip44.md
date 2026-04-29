@@ -140,18 +140,24 @@ whose `t` tag matches the current room:
 3. If decryption succeeds and the plaintext begins with `nv44`, strip the
    prefix and JSON-parse the remainder as a `SignalingMessage`. This is the
    v2 path.
-4. If decryption fails or the prefix is absent after successful decryption,
-   attempt to JSON-parse `content` directly as a v1 `SignalingMessage`. This
-   is the v1 fallback path.
-5. If both paths fail, discard the event. The adapter MUST NOT surface a
-   parse error to the `SignalingMessage` handler.
-6. Both paths converge on the same `SignalingMessage` handler. The wire
+4. If decryption succeeds but the plaintext does not begin with `nv44`,
+   the receiver MUST treat the event as a format error and discard it
+   (per §3). The receiver MUST NOT attempt the v1 fallback in this case;
+   v1 frames are never NIP-44 ciphertext, so a successful NIP-44
+   decryption without the sentinel implies a foreign or future format.
+5. If decryption fails, attempt to JSON-parse `content` directly as a
+   v1 `SignalingMessage`. This is the v1 fallback path.
+6. If both paths fail (step 4 discard or step 5 parse failure), discard
+   the event. The adapter MUST NOT surface a parse error to the
+   `SignalingMessage` handler.
+7. Both paths converge on the same `SignalingMessage` handler. The wire
    version is an adapter-internal concern; Core sees no difference.
 
-A receiver that cannot perform NIP-44 decryption (e.g., an older build that
-predates this ADR) falls through to step 4 automatically, since the v2
-ciphertext is not valid JSON and the v1 JSON parse will fail too. That
-receiver silently discards v2 frames, which is the correct degraded behaviour.
+_(Informative.)_ A receiver that cannot perform NIP-44 decryption
+(e.g., an older build that predates this ADR) falls through to step 5
+automatically, since the v2 ciphertext is not valid JSON and the v1
+JSON parse will fail too. That receiver silently discards v2 frames,
+which is the correct degraded behaviour.
 
 ### 6. Tag and kind stability
 
@@ -166,7 +172,12 @@ The ephemeral secp256k1 keypair rotation defined in ADR-0014 §3 is
 unchanged. NIP-44 encryption is content-only; the Nostr event `pubkey`
 and `sig` fields remain the output of the ephemeral keypair and carry the
 same advisory-authenticity meaning they did in v1. The room symmetric key
-is independent of the ephemeral keypair.
+MUST be independent of the ephemeral keypair: implementations MUST NOT
+mix the ephemeral secp256k1 secret (or any other identity material) into
+the §2 HKDF derivation. Coupling the encryption identity to the
+ephemeral signaling identity would erode the privacy properties
+ADR-0014 §3 grants the keypair, and would defeat the cross-relay
+unlinkability v2 inherits from per-event nonces.
 
 ### 8. Conformance surface extension
 
@@ -175,9 +186,15 @@ is independent of the ephemeral keypair.
 - v2 round-trip: a v2 sender and v2 receiver in the same room exchange a
   `SignalingMessage` end-to-end through the in-process mock relay; the
   receiver's handler fires exactly once with the correct payload.
-- Mixed-version graceful degradation: a v1 sender and v2 receiver in the
-  same room; the v2 receiver correctly parses the v1 plaintext frame via
-  the §5 fallback path.
+- Mixed-version graceful degradation (v1 sender ↔ v2 receiver):
+  a v1 sender and v2 receiver in the same room; the v2 receiver
+  correctly parses the v1 plaintext frame via the §5 fallback path.
+- Mixed-version graceful degradation (v2 sender ↔ v1 receiver):
+  a v2 sender and a v1-only receiver in the same room; the v1-only
+  receiver discards the ciphertext silently (its v1 JSON parse fails;
+  it has no decryption path) and never surfaces a parse error to the
+  handler. This direction is the §Context motivation for locking the
+  v2 wire deterministically and MUST be observed in the gate.
 - Sentinel detection: a v2 receiver that receives a ciphertext whose
   plaintext lacks the `nv44` prefix discards the event without error.
 
@@ -200,8 +217,9 @@ this ADR:
   jointly prohibit.
 - **NIP-44 v1 (deprecated).** Only NIP-44 v2 is targeted. Implementations
   MUST NOT fall back to NIP-44 v1.
-- **Re-keying mid-session.** The room key is fixed for the lifetime of
-  the `roomId`. A new room requires a new invite and a new key derivation.
+- **Re-keying mid-session.** Implementations MUST NOT re-derive the
+  room key during the lifetime of a single `roomId`. A new room
+  requires a new invite and a new key derivation.
 - **Relay-level NIP-44 extensions.** The adapter relies on standard
   NIP-01 frames; no relay-specific encrypted-DM or group-message extension
   is used.
