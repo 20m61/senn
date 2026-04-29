@@ -104,20 +104,29 @@ When a relay connection drops, the adapter SHOULD:
 
 ```sh
 pnpm --filter @senn/signaling-nostr test
+pnpm verify:nostr-self-test
 ```
 
 vitest covers the adapter against an in-process mock relay
 implementing the NIP-01 frame subset above: round-trip publish ➜
 subscribe, dedup across relays, reconnect after socket close.
 
-The adapter does not run against a real Nostr relay in CI to keep
-the test surface deterministic; operators verifying their own relay
-setup should pair this adapter with a smoke script analogous to
-`pnpm verify:http-poll-endpoint` (whose in-process self-test —
-`pnpm verify:http-poll-self-test` — runs in `pnpm conformance` and
-serves as the working template). A Nostr-side equivalent is left as
-follow-up work; the existing in-process mock relay covers the
-adapter's wire-frame surface in the meantime.
+`pnpm verify:nostr-self-test` (included in `pnpm conformance`) is a
+CLI smoke that mirrors `pnpm verify:http-poll-self-test` for the
+Nostr adapter: it spins up an in-process NIP-01 mock relay, injects
+it via `wsCtor`, and runs each MUST clause as a named check
+(publish ➜ subscribe round-trip, dedup across relays, non-25556
+event drop, all-relay-NACK rejection, and ephemeral-key per
+construction). It surfaces a single `ok / FAIL` line per spec
+clause so a regression in the adapter or in the spec mapping is
+visible from the conformance summary.
+
+The adapter does not run against a real Nostr relay in the gate to
+keep the test surface deterministic and vendor-neutral
+([ADR-0007](adr/0007-vendor-neutral-signaling-and-relay.md)).
+Operators verifying their own relay setup SHOULD adapt
+`scripts/verify-nostr-self-test.ts` to point at the relay, or pair
+the adapter with an external NIP-01 probe of their choosing.
 
 ## Cross-references
 
