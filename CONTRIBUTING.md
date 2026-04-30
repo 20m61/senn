@@ -40,9 +40,28 @@ Keep subjects short and write the body in English.
 - Update relevant docs and ADRs when you change behavior or architecture.
 - Run `pnpm conformance` locally before pushing (the pre-push git hook
   runs it automatically — `pnpm install` wires the hook up via the
-  `prepare` script). The hook's pass is the ship contract; GitHub
-  Actions is a convenience mirror, not the authority.
+  `prepare` script). The hook's pass is the ship contract; the
+  repository ships no CI vendor configuration (ADR-0021), so the local
+  run is the only authoritative gate.
 - Ensure manifest validators, license checks, and tests pass.
+
+## End-to-end tests (on demand)
+
+Playwright e2e is intentionally **not** part of `pnpm conformance` —
+it takes ~25 minutes per browser and would dominate the gate. PRs
+that touch the reference web app (`apps/web/`) or the add-on gallery
+(`apps/addon-gallery/`) MUST be exercised by the author and reviewer
+locally before merge:
+
+```sh
+pnpm --filter @senn/web e2e --project=chromium
+pnpm --filter @senn/addon-gallery exec playwright test --project=chromium
+```
+
+Run on `firefox` / `webkit` projects when the change touches platform-
+specific surfaces (`getUserMedia`, file pickers, ICE behaviour). The
+project does not pay for cloud CI minutes (ADR-0022 trust boundary), so
+e2e coverage on UI-touching PRs is an explicit reviewer responsibility.
 
 ## Code Style
 

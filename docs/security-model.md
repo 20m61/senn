@@ -217,3 +217,86 @@ SENN must not claim:
 - Data shared with peers can always be deleted remotely.
 - Connection metadata (who connected to whom, when, from which IP)
   is hidden from a relay or signaling operator.
+
+## Accepted operational risks
+
+The following trade-offs are deliberate. They are documented here so a
+reader who is evaluating SENN's security posture sees the full picture
+— not just the controls that succeed, but the gaps that the project
+has consciously accepted in exchange for some other property.
+
+### No CI vendor on the canonical repo (ADR-0021 / ADR-0022)
+
+The repository ships no `.github/workflows/` or any other CI vendor
+configuration. The contract is `pnpm conformance` plus the
+`.githooks/pre-push` hook, both running on the maintainer's
+workstation.
+
+- **What this buys.** No third-party CI runner has access to the
+  repository's secrets (`NPM_TOKEN`, signing keys, etc.). The publish
+  trust boundary is the maintainer's machine, full stop. A compromise
+  of any CI vendor cannot reach SENN releases.
+- **What this costs.** There is no second runner that catches
+  environment-specific regressions (Node version drift, Linux-vs-macOS
+  filesystem behaviour, network-dependent test flakes). If the
+  maintainer's local env diverges from a typical contributor env, the
+  divergence is detected only at PR review.
+- **Mitigation.** Pin the toolchain (`.nvmrc`, `packageManager`
+  fields). Run the full gate locally before every push (the pre-push
+  hook makes this default). Rely on contributor PR diversity for
+  cross-environment coverage.
+
+### Playwright e2e is out of the conformance gate
+
+`pnpm conformance` deliberately excludes Playwright e2e (~25 min per
+browser). Reviewers run e2e on demand for UI-touching PRs (see
+`CONTRIBUTING.md §End-to-end tests`).
+
+- **What this buys.** The conformance gate stays under ~3 min, which
+  keeps the pre-push hook usable. A 30+ min hook would push
+  contributors toward `--no-verify`.
+- **What this costs.** UI regressions can land on `develop` if a
+  reviewer skips the manual e2e run on a PR that touches `apps/web/`
+  or `apps/addon-gallery/`.
+- **Mitigation.** `CONTRIBUTING.md` flags the responsibility. The
+  unit/contract test suites in `apps/web/` and the `addon-gallery`
+  cover the non-browser slice of the same code paths.
+
+### v1 Nostr signaling is plaintext by default (ADR-0014 / ADR-0024)
+
+`@senn/signaling-nostr` ships v1 frames as JSON plaintext on the relay.
+ADR-0024's NIP-44 v2 cipher is OPTIONAL and opt-in via
+`new NostrSignaling({ enableV2Encryption: true, ... })`. v2 default-on
+is deferred (no decision ADR yet) because it would break mixed-version
+rooms where peers run different `@senn/signaling-nostr` versions.
+
+- **What this buys.** Backward compatibility with any future SENN host
+  that has not yet shipped the v2 path; smaller mental model for the
+  default integration.
+- **What this costs.** A relay operator (or a passive observer of the
+  relay) can read SDP and ICE candidate IPs in v1 mode. The signaling
+  operator threat model in §"Threats vs. signaling / TURN operators"
+  applies in full to v1.
+- **Mitigation.** Hosts with metadata-sensitive deployments SHOULD
+  flip `enableV2Encryption: true` at construction time. ADR-0024 §5
+  guarantees that v2 senders interoperate with v1 receivers and vice
+  versa within the same room (silent discard on the v1 side, v1
+  fallback on the v2 side), so v2 can be enabled per-host without
+  coordinating across all peers.
+
+### Single-maintainer key custody (`docs/governance.md`)
+
+The bootstrap maintainer is the sole holder of the official-add-on
+signing key (ADR-0008) and of the npm publish identity. There is no
+escrow.
+
+- **What this buys.** No second-party trust to manage during pre-alpha.
+  Decisions and signing happen at one workstation.
+- **What this costs.** Loss of that workstation (or of access to the
+  npm account / signing keystore) blocks every signed release until
+  the keystore is restored or rotated.
+- **Mitigation.** ADR-0010 documents the rotation procedure (planned
+  + emergency). `docs/governance.md` Holders table is the authoritative
+  record of current custody. A future "secondary maintainer / key
+  escrow" addition is on the roadmap; until then, the maintainer
+  SHOULD keep an offline backup of the signing-key material.
