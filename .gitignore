@@ -40,3 +40,9 @@ playwright/.cache/
 
 # SENN keystores (per ADR-0009: signing keys MUST NOT be committed)
 *.key.json
+
+# Claude Code runtime state — the harness writes a per-session lock here.
+# Without this entry the publish script's `git status --porcelain` gate
+# (scripts/publish-addon-sdk.sh §1) refuses to proceed because the lock
+# file shows as untracked.
+.claude/scheduled_tasks.lock
