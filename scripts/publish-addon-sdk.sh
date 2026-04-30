@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # publish-addon-sdk.sh — local-first publish for @sennjs/addon-sdk.
-# (Workspace identifier remains @senn/addon-sdk; published name is
-# @sennjs/addon-sdk per ADR-0019 §2 amendment 2026-04-30.)
+# (Renamed from @senn/addon-sdk on 2026-04-30 per ADR-0019 §2
+# amendment; both the workspace package name and the published npm
+# name are @sennjs/addon-sdk.)
 #
 # Replaces the prior .github/workflows/publish-addon-sdk.yml (removed by
 # ADR-0022). The maintainer runs this script from a clean checkout of

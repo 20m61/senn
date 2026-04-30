@@ -61,10 +61,9 @@ provider. The project's correctness contract is enforced **locally**:
   [ADR-0021](docs/adr/0021-local-first-conformance.md) and
   [docs/dev/conformance.md](docs/dev/conformance.md).)
 - **Release**: `pnpm release:addon-sdk <tag>`
-  (`scripts/publish-addon-sdk.sh`) publishes `@sennjs/addon-sdk` (the
-  workspace package whose internal identifier is `@senn/addon-sdk`)
-  from a maintainer machine — no GitHub Actions workflow, no
-  `NPM_TOKEN` secret on the repository. (See
+  (`scripts/publish-addon-sdk.sh`) publishes `@sennjs/addon-sdk` from
+  a maintainer machine — no GitHub Actions workflow, no `NPM_TOKEN`
+  secret on the repository. (See
   [ADR-0022](docs/adr/0022-local-first-publish-pipeline.md) and
   [docs/dev/release.md](docs/dev/release.md).)
 - **Static deploy**: `pnpm build` + `pnpm stage:gallery-static`
@@ -151,9 +150,9 @@ pnpm add -D @sennjs/addon-sdk
 The original `@senn` scope was found registered to an unrelated npm
 account on 2026-04-29 and cannot be reassigned without a Trademark
 Policy Violation Report; the project moved to `@sennjs` per ADR-0019
-§2 amendment 2026-04-30. Workspace-internal references continue to
-use the private `@senn/addon-sdk` workspace identifier (it does not
-participate in npm registration).
+§2 amendment 2026-04-30. The rename also flipped the workspace
+selector — workspace-internal commands are now
+`pnpm --filter @sennjs/addon-sdk ...`.
 
 API surface and the wire format are still subject to change before
 1.0; ADR amendments will be additive when possible (see ADR-0010 / 0012).

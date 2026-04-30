@@ -4,15 +4,14 @@
 
 Accepted.
 
-> **Scope rename note (2026-04-30):** this ADR refers throughout to
-> the SDK package by its workspace identifier `@senn/addon-sdk`. Per
-> [ADR-0019 §2 amendment](0019-publish-pipeline.md), the package is
-> **published on npm as `@sennjs/addon-sdk`**. Where the prose below
-> talks about consumer install/import (e.g., `pnpm add -D ...`,
-> `import "..."`, `/// <reference types="..." />`), the consumer-
-> facing identifier is `@sennjs/addon-sdk`. The workspace identifier
-> stays `@senn/addon-sdk` because it is private and does not
-> participate in npm registration.
+> **Scope rename note (2026-04-30):** the SDK package was originally
+> named `@senn/addon-sdk` and is referred to as such throughout this
+> ADR. Per [ADR-0019 §2 amendment](0019-publish-pipeline.md), the
+> package was renamed to `@sennjs/addon-sdk` on 2026-04-30 (both
+> `package.json#name` and the npm published name flipped — pnpm's
+> workspace selector is tied to the package name, so
+> `pnpm --filter @sennjs/addon-sdk ...` is now the workspace
+> command). The package shape pinned by this ADR is unchanged.
 
 ## Context
 

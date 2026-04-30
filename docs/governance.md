@@ -28,9 +28,9 @@ of the remaining maintainers.
 
 ## Release signing identities (ADR-0023)
 
-`@sennjs/addon-sdk` releases (workspace identifier `@senn/addon-sdk`;
-see ADR-0019 §2 amendment) MAY ship a vendor-neutral provenance
-artefact alongside the npm tarball. The integrity surface is opt-in
+`@sennjs/addon-sdk` releases (renamed from `@senn/addon-sdk` on
+2026-04-30 per ADR-0019 §2 amendment) MAY ship a vendor-neutral
+provenance artefact alongside the npm tarball. The integrity surface is opt-in
 per [ADR-0023](adr/0023-vendor-neutral-provenance.md) §4 and is
 toggled at publish time by `SENN_SIGN_RELEASE` in
 `scripts/publish-addon-sdk.sh`.

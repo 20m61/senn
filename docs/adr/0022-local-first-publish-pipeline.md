@@ -23,10 +23,11 @@ that flow** landed three days later — see the Implemented header
 above.
 
 > **Scope rename note (2026-04-30):** wherever this ADR refers to the
-> SDK as `@senn/addon-sdk`, the published npm name is now
-> `@sennjs/addon-sdk` per [ADR-0019 §2 amendment](0019-publish-pipeline.md).
-> The release script and tag namespace (`addon-sdk-v<semver>`) are
-> unchanged; only the npm scope flipped.
+> SDK as `@senn/addon-sdk`, the package was renamed to
+> `@sennjs/addon-sdk` per [ADR-0019 §2 amendment](0019-publish-pipeline.md)
+> (both `package.json#name` and the npm-published name flipped, since
+> pnpm's workspace selector is tied to the package name). The release
+> script and tag namespace (`addon-sdk-v<semver>`) are unchanged.
 
 ## Context
 

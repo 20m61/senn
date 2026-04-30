@@ -245,7 +245,8 @@ All five stages have shipped on `develop`:
    existing `SignalingTransport`.
 2. ✅ AddonHost bridge ops (`@senn/addon-runtime`):
    permission gates, element-handle registry, level pump.
-3. ✅ SDK surface (`@senn/addon-sdk`).
+3. ✅ SDK surface (`@sennjs/addon-sdk`, originally `@senn/addon-sdk`
+   pre-2026-04-30 rename — see ADR-0019 §2 amendment).
 4. ✅ Reference add-on `voice-call` (`addons/official/voice-call`)
    showing 1:1 bidirectional audio + video.
 5. ✅ Forbidden-API grep extension (`pnpm check:addon-forbidden`)

@@ -22,19 +22,19 @@ response 2026-04-29). The published scope is `@sennjs`
 provenance story) is unchanged. See §2 amendment paragraph for the
 normative rule.
 
-The `NPM_TOKEN` secret originally specified in §5 was never
-provisioned: ADR-0022 superseded §5 (replacing the GitHub Actions
-workflow with the local `scripts/publish-addon-sdk.sh`) before the
-first publish, and the local script reads credentials from the
-maintainer's `~/.npmrc` instead.
+The `NPM_TOKEN` repository secret was originally consumed by §5's
+GitHub Actions workflow (`.github/workflows/publish-addon-sdk.yml`,
+removed in the ADR-0022 commit set before any publish). Under the
+ADR-0022 local-first flow it is no longer used: the publish script
+reads credentials from the maintainer's `~/.npmrc` instead.
 
 ## Context
 
-[ADR-0018](0018-addon-sdk-types.md) fixed the *shape* of
-`@senn/addon-sdk` (the workspace identifier; published as
-`@sennjs/addon-sdk` per §2 amendment below) so that, on publish day,
-both monorepo consumers and external add-on authors get the right
-files at the right paths. It
+[ADR-0018](0018-addon-sdk-types.md) fixed the *shape* of the SDK
+package (originally named `@senn/addon-sdk`, renamed to
+`@sennjs/addon-sdk` on 2026-04-30 per §2 amendment below) so that,
+on publish day, both monorepo consumers and external add-on authors
+get the right files at the right paths. It
 explicitly left the publish *pipeline* to a follow-up:
 
 > §6 — Public npm publish stays out of scope. `private: true` stays for
@@ -72,25 +72,27 @@ ADR-0008 covers manifest signing; the runtime sits one layer below.
 
 ### 1. Publishable scope
 
-Only the SDK package is published in the first wave (workspace name
-`@senn/addon-sdk`, published as `@sennjs/addon-sdk` per §2 amendment).
-Every other workspace package stays `private: true`.
+Only the SDK package is published in the first wave (renamed to
+`@sennjs/addon-sdk` on 2026-04-30; see §2 amendment). Every other
+workspace package stays `private: true` under the `@senn/` workspace
+scope.
 
 | Workspace package | Publish in this ADR? | Reason |
 |-------------------|---------------------|--------|
-| `@senn/addon-sdk` (published as `@sennjs/addon-sdk`) | **Yes** | Add-on authors need it; ADR-0018 already pins the shape |
+| `@sennjs/addon-sdk` (originally `@senn/addon-sdk`) | **Yes** | Add-on authors need it; ADR-0018 already pins the shape |
 | `@senn/manifest` | No (stays private) | Sign / verify primitives — useful to publishers, but the API is in flux and ADR-0010 key rotation is unfinished |
-| `@senn/protocol` | No | Internal type registry; consumed only via `@senn/addon-sdk` |
+| `@senn/protocol` | No | Internal type registry; consumed only via the addon-sdk |
 | `@senn/core`, `@senn/addon-runtime`, `@senn/storage`, `@senn/ui` | No | Host-application internals; no external authoring use case yet |
 | `@senn/signaling-*` adapters | No | Adapters are consumed via SENN host applications, not direct npm install. Re-evaluate when ADR-0007 §"third-party adapters" lands |
 
 Adding a package to this list later is an **additive** ADR, not a
 breaking change to this one. Each new publishable package MUST land
-under the `@sennjs` npm scope (§2 amendment), keep the same version
-policy and release flow defined here, and SHOULD reuse its
-workspace-internal `@senn/<name>` identifier — the workspace and npm
-scopes are deliberately distinct (workspace internal scope is private
-and does not participate in npm registration).
+under the `@sennjs` npm scope (§2 amendment) and keep the same
+version policy and release flow defined here. When a future
+`@senn/<name>` workspace package is elected for publication, it MUST
+also be renamed to `@sennjs/<name>` (in `package.json#name`) before
+publish, since pnpm's workspace selector is tied to the package name
+on disk.
 
 ### 2. Scope and registry
 
@@ -116,15 +118,20 @@ already registered to an unrelated account and cannot be reassigned
 to the SENN project except via a successful Trademark Policy
 Violation Report (the project does not currently hold a registered
 trademark). The maintainer therefore created a new npm organisation
-**`sennjs`** on 2026-04-30, and the package is published as
-`@sennjs/addon-sdk`. Workspace-internal package identifiers stay at
-`@senn/<name>` because they are `private: true` and do not
-participate in npm registration. Any future publishable package MUST
-also publish under `@sennjs/` (see §1's evolution clause). If the
-project later acquires `@senn` via a trademark dispute, a follow-up
-ADR MAY redirect new publishes there and `npm deprecate` the
-`@sennjs/<name>` lineage with a `"moved to @senn/<name>"` message —
-this rename did not constrain that future move.
+**`sennjs`** on 2026-04-30, and the SDK package was renamed in
+`packages/addon-sdk/package.json#name` from `@senn/addon-sdk` to
+`@sennjs/addon-sdk`. Because pnpm's workspace selector is tied to
+`package.json#name`, this rename also flipped the workspace
+identifier — `pnpm --filter @sennjs/addon-sdk ...` is now the
+workspace command (the prior `@senn/addon-sdk` selector no longer
+matches anything). Other workspace packages keep their `@senn/<name>`
+identifiers because they are `private: true` and do not participate
+in npm registration. Any future publishable package MUST be renamed
+to `@sennjs/<name>` before publish (see §1's evolution clause). If
+the project later acquires `@senn` via a trademark dispute, a
+follow-up ADR MAY redirect new publishes there and `npm deprecate`
+the `@sennjs/<name>` lineage with a `"moved to @senn/<name>"`
+message — this rename did not constrain that future move.
 
 ### 3. Version policy
 

@@ -175,10 +175,11 @@ pnpm add -D @sennjs/addon-sdk
 npm install --save-dev @sennjs/addon-sdk
 ```
 
-Inside the SENN monorepo the workspace identifier remains
-`"@senn/addon-sdk": "workspace:*"` — that scope is private and does
-not participate in npm registration. Only the published npm name
-flipped.
+Inside the SENN monorepo the workspace package is now
+`"@sennjs/addon-sdk"` (renamed from `@senn/addon-sdk` on 2026-04-30
+per ADR-0019 §2 amendment). Workspace-internal commands therefore
+use `pnpm --filter @sennjs/addon-sdk ...`; `@senn/addon-sdk` no
+longer matches any workspace.
 
 ### Monorepo-internal alternative — `pnpm pack`
 
@@ -192,8 +193,8 @@ From a clone of `20m61/senn`:
 
 ```sh
 pnpm install
-pnpm --filter @senn/addon-sdk build           # populates dist/
-pnpm --filter @senn/addon-sdk pack            # writes sennjs-addon-sdk-0.1.0.tgz
+pnpm --filter @sennjs/addon-sdk build           # populates dist/
+pnpm --filter @sennjs/addon-sdk pack            # writes sennjs-addon-sdk-0.1.0.tgz
 ```
 
 `pnpm pack` honours the `files` field documented in ADR-0018 §2, so the
