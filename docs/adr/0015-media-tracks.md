@@ -9,6 +9,11 @@ landed in 65c3e1c. Bidirectional perfect negotiation followed in
 4cd0b4a, and the host-side `track.stop()` privacy fix landed in
 4bddf5b.
 
+> **Scope rename note (2026-04-30):** references to `@senn/addon-sdk`
+> in this ADR identify the workspace package; on npm it ships as
+> `@sennjs/addon-sdk` per [ADR-0019 §2 amendment](0019-publish-pipeline.md).
+> The SDK API surface described here is unaffected by the rename.
+
 ## Context
 
 The SENN [Charter](../charter.md) Mission says SENN moves

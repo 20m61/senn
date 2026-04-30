@@ -2,24 +2,33 @@
 
 ## Status
 
-Accepted (2026-04-26). §1 (publishable scope), §2 (npm scope and access),
-§3 (version policy), §4 (no separate runtime signature; rely on
-manifest-signing instead — see ADR-0022 §"npm provenance" for the
-revised integrity story), §6 (regression guards), and §7 (deferred
-items) remain authoritative. **§5 (release flow) is superseded by
-ADR-0022**, which moves the publish runner from a GitHub Actions
-workflow to the local `pnpm release:addon-sdk <tag>` script
-(`scripts/publish-addon-sdk.sh`). Initial publish is pending
-operational prerequisites only: npm `@senn` scope, npm 2FA on the
-maintainer account, and the `private:true` flip + `version: 0.1.0`
-bump on `packages/addon-sdk/package.json`. The `NPM_TOKEN` secret on
-the repository is no longer required (was Actions-specific).
+Accepted (2026-04-26). §1 (publishable scope), §3 (version policy),
+§4 (no separate runtime signature; rely on manifest-signing instead —
+see ADR-0022 §"npm provenance" for the revised integrity story),
+§6 (regression guards), and §7 (deferred items) remain authoritative.
+**§5 (release flow) is superseded by ADR-0022**, which moves the
+publish runner from a GitHub Actions workflow to the local
+`pnpm release:addon-sdk <tag>` script (`scripts/publish-addon-sdk.sh`).
+**§2 (npm scope) is amended (2026-04-30):** the original scope
+choice `@senn` is registered to an unrelated npm account and cannot
+be reassigned without a Trademark Policy Violation Report (npm support
+response 2026-04-29). The published scope is now **`@sennjs`**
+(`@sennjs/addon-sdk`); the rest of §2 (public access, 2FA, ADR-0022
+provenance story) is unchanged. See §2 amendment paragraph for the
+normative rule.
+
+Initial publish is pending only: the user-side `npm publish` invocation
+of the renamed package via `pnpm release:addon-sdk addon-sdk-v0.1.0`.
+The `NPM_TOKEN` secret on the repository is no longer required (was
+Actions-specific).
 
 ## Context
 
 [ADR-0018](0018-addon-sdk-types.md) fixed the *shape* of
-`@senn/addon-sdk` so that, on publish day, both monorepo consumers and
-external add-on authors get the right files at the right paths. It
+`@senn/addon-sdk` (the workspace identifier; published as
+`@sennjs/addon-sdk` per §2 amendment below) so that, on publish day,
+both monorepo consumers and external add-on authors get the right
+files at the right paths. It
 explicitly left the publish *pipeline* to a follow-up:
 
 > §6 — Public npm publish stays out of scope. `private: true` stays for
@@ -33,12 +42,12 @@ authors:
 
 1. **No installable artefact.** The cookbook and
    [writing-an-addon](../dev/writing-an-addon.md) tutorials assume
-   readers can do `pnpm add -D @senn/addon-sdk`, but the package is
+   readers can do `pnpm add -D @sennjs/addon-sdk`, but the package is
    not on npm. The only workaround today is `pnpm pack` from a local
    clone, which is fine for evaluation but not a supported authoring
    path.
 2. **No version policy.** Every package is pinned at `0.0.0`. A
-   downstream pinning `@senn/addon-sdk@0.0.0` cannot tell a renamed
+   downstream pinning `@sennjs/addon-sdk@0.0.0` cannot tell a renamed
    field from a deleted one — the version conveys no information.
    Without a stated policy we cannot promise SemVer compatibility.
 3. **No release flow.** There is no documented sequence for "the SDK
@@ -57,12 +66,13 @@ ADR-0008 covers manifest signing; the runtime sits one layer below.
 
 ### 1. Publishable scope
 
-Only **`@senn/addon-sdk`** is published in the first wave. Every other
-workspace package stays `private: true`.
+Only the SDK package is published in the first wave (workspace name
+`@senn/addon-sdk`, published as `@sennjs/addon-sdk` per §2 amendment).
+Every other workspace package stays `private: true`.
 
-| Package | Publish in this ADR? | Reason |
-|---------|---------------------|--------|
-| `@senn/addon-sdk` | **Yes** | Add-on authors need it; ADR-0018 already pins the shape |
+| Workspace package | Publish in this ADR? | Reason |
+|-------------------|---------------------|--------|
+| `@senn/addon-sdk` (published as `@sennjs/addon-sdk`) | **Yes** | Add-on authors need it; ADR-0018 already pins the shape |
 | `@senn/manifest` | No (stays private) | Sign / verify primitives — useful to publishers, but the API is in flux and ADR-0010 key rotation is unfinished |
 | `@senn/protocol` | No | Internal type registry; consumed only via `@senn/addon-sdk` |
 | `@senn/core`, `@senn/addon-runtime`, `@senn/storage`, `@senn/ui` | No | Host-application internals; no external authoring use case yet |
@@ -70,19 +80,45 @@ workspace package stays `private: true`.
 
 Adding a package to this list later is an **additive** ADR, not a
 breaking change to this one. Each new publishable package MUST land
-under the same scope, version policy, and CI flow defined here.
+under the `@sennjs` npm scope (§2 amendment), keep the same version
+policy and release flow defined here, and SHOULD reuse its
+workspace-internal `@senn/<name>` identifier — the workspace and npm
+scopes are deliberately distinct (workspace internal scope is private
+and does not participate in npm registration).
 
 ### 2. Scope and registry
 
-- Scope: **`@senn`** on the public npmjs.com registry.
+- Scope: **`@sennjs`** on the public npmjs.com registry. (Originally
+  `@senn`; renamed 2026-04-30 per the amendment paragraph below — the
+  amendment supersedes any earlier `@senn` reading of this clause.)
 - Access level: **`public`** (`npm publish --access public` is required;
   scoped packages default to private).
 - Owner: the SENN Project npm organisation. The exact membership and
   recovery flow is operational (not technical) and lives in
   `docs/dev/release.md`, not in this ADR.
 - 2FA: every publisher account MUST enable npm 2FA at the auth-and-
-  publish level. CI uses an automation token scoped to publish only
-  under `@senn/`, configured with `npm publish --provenance`.
+  publish level. The local publish script (ADR-0022) uses a Granular
+  Access Token scoped to publish only under `@sennjs/`, with
+  bypass-2FA enabled. (Original wording "automation token … under
+  `@senn/` … with `--provenance`" is amended: the scope prefix is now
+  `@sennjs/`, and provenance is governed by ADR-0022 §"npm provenance"
+  and ADR-0023.)
+
+**§2 amendment (2026-04-30) — npm scope rename `@senn` → `@sennjs`.**
+On 2026-04-29 npm support confirmed that the `@senn` organisation is
+already registered to an unrelated account and cannot be reassigned
+to the SENN project except via a successful Trademark Policy
+Violation Report (the project does not currently hold a registered
+trademark). The maintainer therefore created a new npm organisation
+**`sennjs`** on 2026-04-30, and the package is published as
+`@sennjs/addon-sdk`. Workspace-internal package identifiers stay at
+`@senn/<name>` because they are `private: true` and do not
+participate in npm registration. Any future publishable package MUST
+also publish under `@sennjs/` (see §1's evolution clause). If the
+project later acquires `@senn` via a trademark dispute, a follow-up
+ADR MAY redirect new publishes there and `npm deprecate` the
+`@sennjs/<name>` lineage with a `"moved to @senn/<name>"` message —
+this rename did not constrain that future move.
 
 ### 3. Version policy
 
@@ -276,7 +312,7 @@ remains one invocation.
 
 ### Positive
 
-- Add-on authors run `pnpm add -D @senn/addon-sdk` and get typed
+- Add-on authors run `pnpm add -D @sennjs/addon-sdk` and get typed
   `window.senn` without cloning the monorepo.
 - The cookbook and writing-an-addon tutorials get a real install path
   to document — the `pnpm pack` workaround moves to a fallback note.
@@ -289,7 +325,9 @@ remains one invocation.
 
 - A new GitHub Actions workflow and an npm automation token to manage.
   Mitigated by reusing the conformance Node / pnpm matrix and pinning
-  the token's scope to `@senn/*`.
+  the token's scope to `@sennjs/*`. (§5 superseded by ADR-0022 — the
+  Actions workflow is no longer used; the token-scope discipline still
+  applies to the local publish script.)
 - Every release requires a manual version bump + tag. Deliberate: a
   human must sign off on the SemVer classification of each change.
 - Two more regression guards in `verify:addon-sdk`. Both are short and
@@ -309,7 +347,8 @@ remains one invocation.
   surface" already binds them to one package; the version policy
   inherits that binding.
 - Public publishing of `@senn/manifest`, `@senn/protocol`, or any
-  other package — see §7.
+  other package — see §7. (When such a package later publishes, its
+  npm scope follows §2 amendment: `@sennjs/<name>`.)
 
 ## Implementation pointers
 
@@ -325,6 +364,6 @@ remains one invocation.
   who has publish rights, the bump-and-tag dance, rollback
   (`npm deprecate`).
 - `docs/dev/writing-an-addon.md`: add a "Install" subsection pointing
-  at `pnpm add -D @senn/addon-sdk` once the first version is live; the
-  current tutorial leaves install implicit.
+  at `pnpm add -D @sennjs/addon-sdk` once the first version is live;
+  the current tutorial leaves install implicit.
 - `docs/adr/README.md`: add the index row for ADR-0019.

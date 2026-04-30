@@ -4,6 +4,16 @@
 
 Accepted.
 
+> **Scope rename note (2026-04-30):** this ADR refers throughout to
+> the SDK package by its workspace identifier `@senn/addon-sdk`. Per
+> [ADR-0019 §2 amendment](0019-publish-pipeline.md), the package is
+> **published on npm as `@sennjs/addon-sdk`**. Where the prose below
+> talks about consumer install/import (e.g., `pnpm add -D ...`,
+> `import "..."`, `/// <reference types="..." />`), the consumer-
+> facing identifier is `@sennjs/addon-sdk`. The workspace identifier
+> stays `@senn/addon-sdk` because it is private and does not
+> participate in npm registration.
+
 ## Context
 
 `@senn/addon-sdk` ships two assets that are conceptually separate but
@@ -138,7 +148,7 @@ already includes `declare global { ... }`. External add-on projects
 that want the global without a runtime import can use:
 
 ```ts
-/// <reference types="@senn/addon-sdk" />
+/// <reference types="@sennjs/addon-sdk" />
 ```
 
 at the top of any `.ts` file — the side-effect of the `declare global`
@@ -218,12 +228,13 @@ to the package *shape*.
 ### Positive
 
 - External add-on authors copy the cookbook example, run `pnpm add -D
-  @senn/addon-sdk` (once published), get `window.senn` typed.
+  @sennjs/addon-sdk` (once published), get `window.senn` typed.
 - Monorepo continues to work: `tsc -b` still produces `dist/`, project
   references still resolve through `src/`.
 - The runtime path is now a documented export, so build scripts can
   resolve it via
-  `require.resolve("@senn/addon-sdk/runtime/senn-addon-sdk.js")`
+  `require.resolve("@sennjs/addon-sdk/runtime/senn-addon-sdk.js")`
+  (or `@senn/addon-sdk/...` when resolved from inside the monorepo)
   instead of hard-coding workspace paths.
 
 ### Negative / accepted costs
@@ -251,6 +262,6 @@ to the package *shape*.
 - `packages/addon-sdk/runtime/senn-addon-sdk.d.ts`: new one-line shim
   per §4.
 - `docs/dev/writing-an-addon.md`: add a "TypeScript types" subsection
-  showing the `/// <reference types="@senn/addon-sdk" />` form.
+  showing the `/// <reference types="@sennjs/addon-sdk" />` form.
 - No source changes to `src/index.ts` or
   `runtime/senn-addon-sdk.js` are required by this ADR.
