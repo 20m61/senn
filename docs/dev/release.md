@@ -351,9 +351,11 @@ during automated publish. The token MUST therefore have
 "bypass two-factor authentication" enabled.
 
 The active token's name and expiry are recorded out-of-band (the
-maintainer's local notes / password manager). The
-`senn-local-publish-2026-04-v3` token issued for the 0.1.0 release
-expires **2026-07-26**. After that date, every `pnpm
+maintainer's local notes / password manager). _Example (subject to
+rotation; this section describes the procedure, not the current
+token-of-record)_: the `senn-local-publish-2026-04-v3` token issued
+for the 0.1.0 release expires **2026-07-26**. After the expiry of
+whatever token is currently in `~/.npmrc`, every `pnpm
 release:addon-sdk <tag>` invocation will fail at the registry side
 with `403`. Rotate **before** the expiry, not after — there is no
 fallback path while the token is dead.

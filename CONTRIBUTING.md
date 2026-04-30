@@ -48,10 +48,11 @@ Keep subjects short and write the body in English.
 ## End-to-end tests (on demand)
 
 Playwright e2e is intentionally **not** part of `pnpm conformance` —
-it takes ~25 minutes per browser and would dominate the gate. PRs
-that touch the reference web app (`apps/web/`) or the add-on gallery
-(`apps/addon-gallery/`) MUST be exercised by the author and reviewer
-locally before merge:
+it takes ~25 minutes per browser and would dominate the gate. For
+PRs that touch the reference web app (`apps/web/`) or the add-on
+gallery (`apps/addon-gallery/`), the author should run e2e locally
+before requesting review, and the reviewer should verify the
+relevant project before approving:
 
 ```sh
 pnpm --filter @senn/web e2e --project=chromium

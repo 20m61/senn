@@ -298,5 +298,6 @@ escrow.
 - **Mitigation.** ADR-0010 documents the rotation procedure (planned
   + emergency). `docs/governance.md` Holders table is the authoritative
   record of current custody. A future "secondary maintainer / key
-  escrow" addition is on the roadmap; until then, the maintainer
-  SHOULD keep an offline backup of the signing-key material.
+  escrow" addition is a known follow-up (not yet ADR-tracked); until
+  it lands, the maintainer SHOULD keep an offline backup of the
+  signing-key material.
