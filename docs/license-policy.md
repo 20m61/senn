@@ -4,6 +4,17 @@
 
 SENN Core is licensed under the Apache License 2.0.
 
+## Scope
+
+This policy applies to dependencies that ship in SENN distribution
+artefacts: the `@sennjs/*` npm packages, signed official add-ons under
+`addons/official/`, and the deployable web app/gallery bundles. It is
+enforced via `pnpm check:licenses`, which walks the production
+dependency tree (`pnpm list -r --prod --json --depth Infinity`). Pure
+devDependencies (build tools, test runners, Vite plugins) are out of
+scope because they do not flow into shipped artefacts; their licenses
+are recorded in the repo through `pnpm install` but not gated.
+
 ## Allowed Dependency Licenses
 
 - MIT
@@ -43,6 +54,24 @@ dedication forms still go through "Review Required" below.
 - BUSL
 - No license
 - Unknown license
+
+## Overrides
+
+Exceptions live in `LICENSE_OVERRIDES.json` at the repo root. Each
+entry MUST pin `name`, exact `version`, declared `license`, `tier`
+(`allowed` or `review-required`), `rationale`, `approvedBy`
+(maintainer handle), and `approvedAt` (ISO-8601 date). `expiresAt`
+(ISO-8601 date) SHOULD be set within 12 months of `approvedAt`; a
+present-and-past `expiresAt` deactivates the override and the package
+is re-evaluated against the allow-list.
+
+Disallowed licenses (GPL/AGPL/SSPL/BUSL/no-license/unknown) MUST NOT
+be overridden under any circumstances; an override carrying one of
+these is rejected at load time. Adding any other override requires
+maintainer review on the PR that introduces it.
+
+The schema is enforced by `scripts/check-licenses.ts` at every
+`pnpm conformance` run; unknown fields cause an immediate failure.
 
 ## Clean-room Principle
 

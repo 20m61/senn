@@ -486,10 +486,17 @@ yet exist on `develop`.
 
 ### Neutral / follow-up
 
-- `scripts/check-licenses.ts` is a stub and does not yet enforce the
+- ~~`scripts/check-licenses.ts` is a stub and does not yet enforce the
   policy. Hardening it is out of scope for this ADR but is a desirable
   follow-up so future Unlicense-or-similar drift is caught at the
-  gate.
+  gate.~~ **Done.** `pnpm check:licenses` now walks the production
+  transitive tree (`pnpm list -r --prod --json --depth Infinity`),
+  evaluates each package against `docs/license-policy.md`'s allow-list
+  with v1 SPDX `OR`/`AND` handling, and applies entries from
+  `LICENSE_OVERRIDES.json`. Wired into `pnpm conformance` between
+  `check:addon-forbidden` and `verify:official`. The Scope and
+  Overrides clauses added to `docs/license-policy.md` in the same PR
+  are the policy substrate the script enforces.
 - A future ADR that migrates `@senn/signaling-nostr` off `nostr-tools`
   inherits §1's obligation to re-evaluate the v2 implementation source.
 - The known-answer test vector adopted in §5 is sourced from the
