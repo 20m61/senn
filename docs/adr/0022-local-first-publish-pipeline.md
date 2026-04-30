@@ -2,20 +2,32 @@
 
 ## Status
 
-Accepted (2026-04-27). Supersedes ADR-0019 §5 (release flow). The
-remainder of ADR-0019 — publishable scope, npm scope, SemVer policy,
-runtime-signing decision, and the §6 regression guards — stays
-authoritative. Implementation landed in the same commit set as this
-ADR: `scripts/publish-addon-sdk.sh`, `pnpm release:addon-sdk` script
-entry, removal of `.github/workflows/`, removal of
+**Implemented** (2026-04-30). First publish via this flow:
+`@sennjs/addon-sdk@0.1.0` (tag `addon-sdk-v0.1.0`, commit 295c87b,
+published 2026-04-30T00:16:19Z). The script gate sequence (working-tree
+clean → tag/HEAD/version equality → `private:false` → `pnpm install`
+→ `pnpm conformance` → `pnpm pack` non-empty → operator confirm →
+`pnpm publish --tag latest --access public --no-git-checks`) ran end-
+to-end without operator intervention beyond the single `[y/N]` prompt.
+
+Originally Accepted 2026-04-27. Supersedes ADR-0019 §5 (release flow).
+The remainder of ADR-0019 — publishable scope, npm scope (amended
+2026-04-30; see ADR-0019 §2 amendment), SemVer policy, runtime-
+signing decision, and the §6 regression guards — stays authoritative.
+The **tooling** landed in the same commit set as this ADR
+(2026-04-27): `scripts/publish-addon-sdk.sh`, `pnpm release:addon-sdk`
+script entry, removal of `.github/workflows/`, removal of
 `publishConfig.provenance` from `packages/addon-sdk/package.json`, and
-the renamed `scripts/stage-gallery-static.ts`.
+the renamed `scripts/stage-gallery-static.ts`. The **first publish via
+that flow** landed three days later — see the Implemented header
+above.
 
 > **Scope rename note (2026-04-30):** wherever this ADR refers to the
-> SDK as `@senn/addon-sdk`, the published npm name is now
-> `@sennjs/addon-sdk` per [ADR-0019 §2 amendment](0019-publish-pipeline.md).
-> The release script and tag namespace (`addon-sdk-v<semver>`) are
-> unchanged; only the npm scope flipped.
+> SDK as `@senn/addon-sdk`, the package was renamed to
+> `@sennjs/addon-sdk` per [ADR-0019 §2 amendment](0019-publish-pipeline.md)
+> (both `package.json#name` and the npm-published name flipped, since
+> pnpm's workspace selector is tied to the package name). The release
+> script and tag namespace (`addon-sdk-v<semver>`) are unchanged.
 
 ## Context
 

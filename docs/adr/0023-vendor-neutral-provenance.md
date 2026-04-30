@@ -9,12 +9,14 @@ publish *flow*; this ADR adds an OPTIONAL, vendor-neutral provenance
 artefact that downstream consumers can verify without trusting any CI
 runner.
 
-> **Scope rename note (2026-04-30):** the package is now published on
-> npm as `@sennjs/addon-sdk` per [ADR-0019 §2 amendment](0019-publish-pipeline.md).
-> Wherever this ADR cites `@senn/addon-sdk@<semver>` consumer commands
+> **Scope rename note (2026-04-30):** the package was renamed from
+> `@senn/addon-sdk` to `@sennjs/addon-sdk` per
+> [ADR-0019 §2 amendment](0019-publish-pipeline.md) (both
+> `package.json#name` and the npm-published name flipped). Wherever
+> this ADR cites `@senn/addon-sdk@<semver>` in consumer commands
 > (`npm pack`, registry URL), substitute `@sennjs/addon-sdk@<semver>`.
 > The integrity story (sigstore-attached `.sig`/`.cert` artefacts on
-> the GitHub Release) is unchanged; only the registry name flipped.
+> the GitHub Release) is unchanged.
 
 ## Context
 
@@ -34,7 +36,7 @@ substitute integrity surfaces SENN already ships:
    inside every official add-on directory at runtime.
 
 Both are real surfaces, but neither attests the **npm tarball
-itself**. A downstream that pulls `@senn/addon-sdk@0.1.0` from npm
+itself**. A downstream that pulls `@sennjs/addon-sdk@0.1.0` from npm
 into a non-SENN context (e.g., a third-party authoring tool that
 ships SENN add-ons but is not itself a SENN host) cannot verify "this
 tarball was built from the canonical repo at the named tag" without

@@ -15,11 +15,12 @@ The release flow itself is documented in
 [ADR-0022](../../docs/adr/0022-local-first-publish-pipeline.md) (local-
 first, no CI vendor dependency).
 
-## 0.1.0 — 2026-04-27
+## 0.1.0 — 2026-04-27 _(published 2026-04-30T00:16:19Z)_
 
 Initial public release. Establishes the package shape pinned by
 ADR-0018 and the version policy of ADR-0019. Renamed to
 `@sennjs/addon-sdk` before first publish (see scope note above).
+Tag: `addon-sdk-v0.1.0` (commit 295c87b).
 
 ### Public surface
 

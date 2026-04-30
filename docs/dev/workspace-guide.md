@@ -42,15 +42,19 @@ senn/
 @senn/protocol               depends on: nothing in this repo
 @senn/storage                depends on: nothing in this repo
 @senn/ui                     depends on: nothing in this repo
-@senn/addon-sdk              depends on: @senn/protocol
+@sennjs/addon-sdk            depends on: @senn/protocol
 @senn/addon-runtime          depends on: @senn/protocol
 @senn/signaling-url-fragment depends on: @senn/protocol
 @senn/signaling-http-poll    depends on: @senn/protocol
 @senn/manifest               depends on: nothing in this repo
 @senn/core                   depends on: @senn/protocol, @senn/storage, @senn/addon-runtime
 apps/web                     depends on: @senn/core, @senn/protocol, @senn/signaling-url-fragment, @senn/storage, @senn/ui
-addons/official/*            depends on: @senn/addon-sdk only (must run as static add-ons)
-examples/*                   depends on: @senn/addon-sdk only
+addons/official/*            depends on: @sennjs/addon-sdk only (must run as static add-ons)
+examples/*                   depends on: @sennjs/addon-sdk only
+
+# (@sennjs/addon-sdk was renamed from @senn/addon-sdk on 2026-04-30
+#  per ADR-0019 §2 amendment. All other workspace packages keep the
+#  @senn/<name> identifier — they are private and not on npm.)
 ```
 
 - `@senn/protocol` MUST stay free of runtime concerns (no DOM, no IndexedDB).

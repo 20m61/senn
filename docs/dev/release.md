@@ -80,10 +80,10 @@ but no workspace-wide version bump is involved.
 
 ## `@sennjs/addon-sdk` releases (ADR-0019 + ADR-0022)
 
-The SDK publishes to public npm under the `@sennjs` scope (workspace
-identifier remains `@senn/addon-sdk`; ADR-0019 §2 amendment 2026-04-30
-records the rename rationale). Releases run on their own cadence,
-independent of the host-application release train. Tag namespace is
+The SDK publishes to public npm under the `@sennjs` scope (renamed
+from `@senn/addon-sdk` on 2026-04-30; ADR-0019 §2 amendment records
+the rename rationale). Releases run on their own cadence, independent
+of the host-application release train. Tag namespace is
 `addon-sdk-v<semver>` so future publishable packages can co-exist.
 
 ADR-0022 supersedes ADR-0019 §5: the publish flow runs **locally** from a

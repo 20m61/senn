@@ -61,10 +61,9 @@ provider. The project's correctness contract is enforced **locally**:
   [ADR-0021](docs/adr/0021-local-first-conformance.md) and
   [docs/dev/conformance.md](docs/dev/conformance.md).)
 - **Release**: `pnpm release:addon-sdk <tag>`
-  (`scripts/publish-addon-sdk.sh`) publishes `@sennjs/addon-sdk` (the
-  workspace package whose internal identifier is `@senn/addon-sdk`)
-  from a maintainer machine — no GitHub Actions workflow, no
-  `NPM_TOKEN` secret on the repository. (See
+  (`scripts/publish-addon-sdk.sh`) publishes `@sennjs/addon-sdk` from
+  a maintainer machine — no GitHub Actions workflow, no `NPM_TOKEN`
+  secret on the repository. (See
   [ADR-0022](docs/adr/0022-local-first-publish-pipeline.md) and
   [docs/dev/release.md](docs/dev/release.md).)
 - **Static deploy**: `pnpm build` + `pnpm stage:gallery-static`
@@ -139,17 +138,21 @@ public release. The wire layer is implemented end-to-end:
   (gzip 24 KB) JS bundle plus addon assets, deployable to any static
   host (see `docs/deployment.md`).
 
-> **`@sennjs/addon-sdk` 0.1.0 — pending first npm publish.** The
-> release is prepared on `develop` (`packages/addon-sdk/package.json#name`
-> = `@sennjs/addon-sdk`, `version` = `0.1.0`, `private:false`,
-> ADR-0018 surface frozen) and the `pnpm release:addon-sdk` flow is
-> verified end-to-end. The first publish was originally targeted at
-> `@senn/addon-sdk`; npm support confirmed on 2026-04-29 that `@senn`
-> is registered to an unrelated account and cannot be reassigned, so
-> the project moved to `@sennjs` (created 2026-04-30). Until the
-> first publish lands, external authors install via `pnpm pack` per
-> [`docs/dev/writing-an-addon.md`](docs/dev/writing-an-addon.md)
-> §"Trying the SDK from an external project (pre-publish)".
+**`@sennjs/addon-sdk` 0.1.0 is on npm** (published 2026-04-30T00:16Z,
+tag `addon-sdk-v0.1.0`, commit 295c87b — see registry record at
+<https://www.npmjs.com/package/@sennjs/addon-sdk>). External authors
+install with:
+
+```sh
+pnpm add -D @sennjs/addon-sdk
+```
+
+The original `@senn` scope was found registered to an unrelated npm
+account on 2026-04-29 and cannot be reassigned without a Trademark
+Policy Violation Report; the project moved to `@sennjs` per ADR-0019
+§2 amendment 2026-04-30. The rename also flipped the workspace
+selector — workspace-internal commands are now
+`pnpm --filter @sennjs/addon-sdk ...`.
 
 API surface and the wire format are still subject to change before
 1.0; ADR amendments will be additive when possible (see ADR-0010 / 0012).

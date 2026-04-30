@@ -136,17 +136,12 @@ remove every CI/CD vendor dependency from the canonical repo.
 These are accepted in an ADR but not shipped yet. The order is
 indicative, not committed:
 
-- 🟡 **`@sennjs/addon-sdk` initial npm publish** — ADR-0019 / ADR-0022
-  toolchain is in place; package preparation (`name`:
-  `@sennjs/addon-sdk`, `private:false`, `version: 0.1.0`,
-  canonicalised `repository.url`, populated `keywords` / `bugs`,
-  metadata regression guards) is complete on `develop`. The local
-  publish flow is verified end-to-end up to the registry PUT. The
-  first publish is held only on the user-side `pnpm release:addon-sdk
-  addon-sdk-v0.1.0` invocation. (The original `@senn` scope was found
-  unavailable on 2026-04-29; the project moved to `@sennjs` per
-  ADR-0019 §2 amendment 2026-04-30. Bypass-2FA Granular Token is
-  configured.)
+- ✅ ~~**`@sennjs/addon-sdk` initial npm publish**~~ — shipped 2026-04-30
+  (`@sennjs/addon-sdk@0.1.0`, tag `addon-sdk-v0.1.0`, commit 295c87b)
+  via the ADR-0022 local-first flow. Original `@senn` scope was found
+  unavailable on 2026-04-29; project moved to `@sennjs` per ADR-0019
+  §2 amendment 2026-04-30. Install with `pnpm add -D @sennjs/addon-sdk`.
+  Registry: <https://www.npmjs.com/package/@sennjs/addon-sdk>.
 - ✅ ~~**Node-side PeerSession tests**~~ — shipped in
   `packages/core/test/peer-session.test.ts`; covers every MUST in
   `docs/peer-session-spec.md` against in-process fakes. Playwright

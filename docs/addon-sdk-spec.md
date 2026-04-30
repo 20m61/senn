@@ -8,7 +8,7 @@ when, and only when, they appear in all capitals.
 
 ## Intent
 
-Define the JavaScript surface that `@senn/addon-sdk` installs as
+Define the JavaScript surface that `@sennjs/addon-sdk` installs as
 `window.senn` inside an add-on iframe. This page is normative for
 the **shape** of the global; the underlying wire is the bridge in
 [addon-runtime-spec.md](addon-runtime-spec.md), which is what both
@@ -67,7 +67,7 @@ interface SennAddonEventMap {
 }
 ```
 
-The full TypeScript types live in `@senn/addon-sdk` (`src/index.ts`).
+The full TypeScript types live in `@sennjs/addon-sdk` (`src/index.ts`).
 
 ## Normative checklist
 
@@ -125,7 +125,7 @@ directly with `kind: "senn.addon.v1"`. Both are valid.
 - Loading the SDK from a different origin — the iframe's CSP
   `default-src 'self'` blocks it; the add-on must ship the SDK on
   its own origin.
-- An add-on importing `@senn/addon-sdk` as an ES module — works for
+- An add-on importing `@sennjs/addon-sdk` as an ES module — works for
   bundler-based builds, but the static add-ons that ship in this
   repo intentionally use the classic-script form so they remain
   drop-in deployable.

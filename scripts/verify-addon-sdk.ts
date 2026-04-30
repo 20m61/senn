@@ -35,7 +35,7 @@
  *      so future publishable packages do not re-introduce the same
  *      gaps. (See `docs/dev/release.md` §"Troubleshooting".)
  *
- * Run after `pnpm --filter @senn/addon-sdk build` (or after a full
+ * Run after `pnpm --filter @sennjs/addon-sdk build` (or after a full
  * `pnpm typecheck`, which builds dist as a side-effect via project
  * references).
  */
@@ -113,7 +113,7 @@ async function checkArtefacts(): Promise<void> {
     ["runtime/senn-addon-sdk.d.ts", RUNTIME_DTS],
   ] as const) {
     if (!(await exists(p))) {
-      fail(`${label} missing — run \`pnpm --filter @senn/addon-sdk build\``);
+      fail(`${label} missing — run \`pnpm --filter @sennjs/addon-sdk build\``);
       continue;
     }
     if (!(await nonEmpty(p))) {
