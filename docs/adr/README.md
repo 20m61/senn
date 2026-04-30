@@ -49,10 +49,10 @@ archaeology.
 | 0016 | [Add-on gallery — discovery, trust display, install hand-off](0016-addon-gallery.md) | Implemented |
 | 0017 | [Registry schema v2 — categorisation, deprecation, meta-registries](0017-registry-schema-v2.md) | Implemented (superseded by 0020 for v3 fields) |
 | 0018 | [Add-on SDK type distribution](0018-addon-sdk-types.md) | Accepted |
-| 0019 | [Public npm publish pipeline](0019-publish-pipeline.md) | Accepted (§5 superseded by 0022; §2 amended 2026-04-30 — npm scope is `@sennjs/` after `@senn` was found unavailable; tooling shipped — local script, guards, runbook in [`docs/dev/release.md`](../dev/release.md); initial publish pending only the user-side `pnpm release:addon-sdk addon-sdk-v0.1.0` invocation) |
+| 0019 | [Public npm publish pipeline](0019-publish-pipeline.md) | Implemented (first publish: `@sennjs/addon-sdk@0.1.0` 2026-04-30T00:16Z, tag `addon-sdk-v0.1.0`, commit 295c87b; §5 superseded by 0022; §2 amended 2026-04-30) |
 | 0020 | [Registry schema v3 — version histories, submissions, audits](0020-registry-schema-v3.md) | Implemented |
 | 0021 | [Local-first conformance gate (no dependency on GitHub Actions)](0021-local-first-conformance.md) | Implemented (hardened by 0022) |
-| 0022 | [Local-first publish pipeline (supersedes 0019 §5)](0022-local-first-publish-pipeline.md) | Accepted |
+| 0022 | [Local-first publish pipeline (supersedes 0019 §5)](0022-local-first-publish-pipeline.md) | Implemented (first publish via this flow: `@sennjs/addon-sdk@0.1.0` 2026-04-30) |
 | 0023 | [Vendor-neutral provenance for `@senn/addon-sdk` releases](0023-vendor-neutral-provenance.md) | Proposed |
 | 0024 | [Encrypted Nostr signaling content via NIP-44](0024-encrypted-nostr-signaling-nip44.md) | Accepted |
 | 0025 | [Default signing tool for ADR-0023 vendor-neutral provenance](0025-release-signing-tool-default.md) | Accepted |

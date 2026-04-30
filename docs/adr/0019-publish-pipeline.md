@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted (2026-04-26). §1 (publishable scope), §3 (version policy),
+**Implemented** (2026-04-30). First publish landed: `@sennjs/addon-sdk@0.1.0`
+via tag `addon-sdk-v0.1.0` (commit 295c87b), published 2026-04-30T00:16:19Z
+through `scripts/publish-addon-sdk.sh` (ADR-0022). `latest` dist-tag = 0.1.0;
+registry record at https://www.npmjs.com/package/@sennjs/addon-sdk.
+
+Originally Accepted 2026-04-26. §1 (publishable scope), §3 (version policy),
 §4 (no separate runtime signature; rely on manifest-signing instead —
 see ADR-0022 §"npm provenance" for the revised integrity story),
 §6 (regression guards), and §7 (deferred items) remain authoritative.
@@ -12,15 +17,13 @@ publish runner from a GitHub Actions workflow to the local
 **§2 (npm scope) is amended (2026-04-30):** the original scope
 choice `@senn` is registered to an unrelated npm account and cannot
 be reassigned without a Trademark Policy Violation Report (npm support
-response 2026-04-29). The published scope is now **`@sennjs`**
+response 2026-04-29). The published scope is `@sennjs`
 (`@sennjs/addon-sdk`); the rest of §2 (public access, 2FA, ADR-0022
 provenance story) is unchanged. See §2 amendment paragraph for the
 normative rule.
 
-Initial publish is pending only: the user-side `npm publish` invocation
-of the renamed package via `pnpm release:addon-sdk addon-sdk-v0.1.0`.
-The `NPM_TOKEN` secret on the repository is no longer required (was
-Actions-specific).
+The `NPM_TOKEN` secret on the repository was never required (was
+Actions-specific and ADR-0022 removed the workflow).
 
 ## Context
 

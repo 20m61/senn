@@ -163,38 +163,37 @@ Add-on `index.html` then loads it as a classic script:
 <script src="addon.js"></script>
 ```
 
-`@sennjs/addon-sdk` is **prepared for npm publish at version 0.1.0**
-but is **not yet on the public registry**. Inside this repo you depend
-on it via `"@senn/addon-sdk": "workspace:*"` (the workspace identifier
-remains under the private `@senn` workspace scope; only the published
-npm name is `@sennjs/addon-sdk` per ADR-0019 §2 amendment 2026-04-30).
-ADR-0019 owns the public publish flow; ADR-0022 governs the local-
-first publish runner that produces the tarball when the registry side
-is ready.
+### Install
 
-> **Why `@sennjs` instead of `@senn`?** npm support confirmed on
-> 2026-04-29 that `@senn` is registered to an unrelated account and
-> cannot be reassigned (only path: trademark dispute). The maintainer
-> created `@sennjs` on 2026-04-30. `pnpm release:addon-sdk
-> addon-sdk-v0.1.0` ships the tarball that the steps below produce
-> locally — the bytes are byte-identical, so your `pnpm pack`-based
-> install path survives the registry transition unchanged.
+`@sennjs/addon-sdk@0.1.0` is on npm (published 2026-04-30; ADR-0019
+§2 amendment notes the rename from the original `@senn` scope, which
+was found registered to an unrelated account):
 
-### Trying the SDK from an external project (pre-publish)
+```sh
+pnpm add -D @sennjs/addon-sdk
+# or
+npm install --save-dev @sennjs/addon-sdk
+```
 
-Until `@sennjs/addon-sdk` ships to npm under the `@sennjs` scope
-(ADR-0019 + ADR-0022), external authors can still depend on the exact
-same artefacts via `pnpm pack`. This produces a tarball that mirrors
-what the future `pnpm publish` will produce, so the install path you
-exercise today is the install path users will run after publish — no
-rewrite needed.
+Inside the SENN monorepo the workspace identifier remains
+`"@senn/addon-sdk": "workspace:*"` — that scope is private and does
+not participate in npm registration. Only the published npm name
+flipped.
+
+### Monorepo-internal alternative — `pnpm pack`
+
+If you want to depend on the exact build that ships from this repo's
+`develop` branch (e.g., to evaluate an unreleased SDK change locally),
+the same artefacts can also be obtained via `pnpm pack` without going
+through npm. The tarball produced is byte-identical to what
+`pnpm publish` ships.
 
 From a clone of `20m61/senn`:
 
 ```sh
 pnpm install
 pnpm --filter @senn/addon-sdk build           # populates dist/
-pnpm --filter @senn/addon-sdk pack            # writes senn-addon-sdk-0.1.0.tgz
+pnpm --filter @senn/addon-sdk pack            # writes sennjs-addon-sdk-0.1.0.tgz
 ```
 
 `pnpm pack` honours the `files` field documented in ADR-0018 §2, so the
@@ -202,7 +201,7 @@ tarball contains `dist/`, `runtime/`, `src/`, and `package.json`. Verify
 it does:
 
 ```sh
-tar -tzf packages/addon-sdk/senn-addon-sdk-0.1.0.tgz | sort
+tar -tzf packages/addon-sdk/sennjs-addon-sdk-0.1.0.tgz | sort
 # package/LICENSE
 # package/dist/index.d.ts
 # package/dist/index.d.ts.map
@@ -218,9 +217,9 @@ In your external add-on project, install the tarball directly:
 
 ```sh
 cd path/to/your-addon
-pnpm add -D /absolute/path/to/senn-addon-sdk-0.1.0.tgz
+pnpm add -D /absolute/path/to/sennjs-addon-sdk-0.1.0.tgz
 # or, if you prefer not to copy the path:
-pnpm add -D file:../senn/packages/addon-sdk/senn-addon-sdk-0.1.0.tgz
+pnpm add -D file:../senn/packages/addon-sdk/sennjs-addon-sdk-0.1.0.tgz
 ```
 
 The TypeScript and runtime-copy snippets above work unchanged: the
@@ -229,8 +228,7 @@ The TypeScript and runtime-copy snippets above work unchanged: the
 `require.resolve("@sennjs/addon-sdk/runtime/senn-addon-sdk.js")`
 resolves into `runtime/senn-addon-sdk.js` from the tarball.
 
-When ADR-0019 lands the published package, drop the tarball line and
-switch to:
+For published-package consumers, the registry install command is:
 
 ```sh
 pnpm add -D @sennjs/addon-sdk
