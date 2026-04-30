@@ -150,8 +150,13 @@ while IFS= read -r segment; do
   fi
 
   # ─── Rule: package publishing (pnpm/npm/yarn publish) ────────────
+  # Per ADR-0022, publishes go through the maintainer-only local script
+  # `scripts/publish-addon-sdk.sh` (invoked via `pnpm release:addon-sdk
+  # <tag>`). Direct `pnpm publish` from Claude is blocked because the
+  # script wraps the publish in a tag/conformance gate the maintainer
+  # confirms interactively.
   if [[ "$segment" =~ ^(pnpm|npm|yarn)[[:space:]]+publish([[:space:]]|$) ]]; then
-    deny "SENN guardrail: package publishing is workflow-only (.github/workflows/publish-addon-sdk.yml). Do not publish from the local machine."
+    deny "SENN guardrail: package publishing is maintainer-only and runs through scripts/publish-addon-sdk.sh (ADR-0022). Do not invoke 'pnpm publish' directly — ask the user to run 'pnpm release:addon-sdk <tag>' instead."
   fi
 
   # ─── Rule: bash-side touch on protected credential paths ─────────
