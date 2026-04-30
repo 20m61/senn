@@ -56,7 +56,8 @@ per-identity authenticated key exchange are explicitly out of scope (see
 
 ## Decision
 
-Adopt NIP-44 v2 (XChaCha20-Poly1305 with HKDF-SHA256 per the NIP-44
+Adopt NIP-44 v2 (ChaCha20 + HMAC-SHA256 in encrypt-then-MAC
+composition, with HKDF-SHA256 key derivation, per the NIP-44
 specification at https://github.com/nostr-protocol/nips/blob/master/44.md)
 as the OPTIONAL v2 content cipher for kind-25556 events in the
 `@senn/signaling-nostr` adapter, keyed off a room-derived symmetric secret,
@@ -69,11 +70,14 @@ Specifically:
 ### 1. Cipher: NIP-44 v2
 
 The v2 content cipher is NIP-44 v2 exactly as the NIP-44 specification
-defines it: XChaCha20-Poly1305 authenticated encryption, with HKDF-SHA256
-key derivation applied to the conversation key. Implementations MUST NOT use
-the deprecated NIP-44 v1 variant. The NIP-44 ciphertext envelope is base64
-standard-encoded and placed directly in the Nostr event's `content` field,
-replacing the v1 JSON string.
+defines it: ChaCha20 (12-byte nonce, the standardised variant — not
+XChaCha20) for the encrypted payload, with HMAC-SHA256 over the
+ciphertext as the authentication tag in encrypt-then-MAC composition,
+and HKDF-SHA256 applied to the conversation key for per-message
+sub-key derivation. Implementations MUST NOT use the deprecated
+NIP-44 v1 variant. The NIP-44 ciphertext envelope (`version || nonce
+|| ciphertext || mac`, base64 standard-encoded) is placed directly in
+the Nostr event's `content` field, replacing the v1 JSON string.
 
 ### 2. Room key derivation
 
@@ -134,24 +138,34 @@ enabled, the adapter MUST default to v1 plaintext behaviour (ADR-0014).
 A receiver MUST follow this ordered logic on every inbound kind-25556 event
 whose `t` tag matches the current room:
 
-1. Derive `encryption_key` from the event's room tag (`senn:<roomId>`) using
-   the §2 derivation.
+1. Parse the bare `<roomId>` out of the matched `t` tag (the 26-char
+   Crockford base32 segment after the `senn:` prefix) and apply the §2
+   derivation with `ikm = UTF-8(<roomId>)` — never `ikm =
+   UTF-8("senn:<roomId>")`. Including the prefix in `ikm` produces a
+   different key from a peer that follows §2 and breaks v2 decryption
+   deterministically.
 2. Attempt NIP-44 v2 decryption of `content` using `encryption_key`.
 3. If decryption succeeds and the plaintext begins with `nv44`, strip the
    prefix and JSON-parse the remainder as a `SignalingMessage`. This is the
    v2 path.
-4. If decryption fails or the prefix is absent after successful decryption,
-   attempt to JSON-parse `content` directly as a v1 `SignalingMessage`. This
-   is the v1 fallback path.
-5. If both paths fail, discard the event. The adapter MUST NOT surface a
-   parse error to the `SignalingMessage` handler.
-6. Both paths converge on the same `SignalingMessage` handler. The wire
+4. If decryption succeeds but the plaintext does not begin with `nv44`,
+   the receiver MUST treat the event as a format error and discard it
+   (per §3). The receiver MUST NOT attempt the v1 fallback in this case;
+   v1 frames are never NIP-44 ciphertext, so a successful NIP-44
+   decryption without the sentinel implies a foreign or future format.
+5. If decryption fails, attempt to JSON-parse `content` directly as a
+   v1 `SignalingMessage`. This is the v1 fallback path.
+6. If both paths fail (step 4 discard or step 5 parse failure), discard
+   the event. The adapter MUST NOT surface a parse error to the
+   `SignalingMessage` handler.
+7. Both paths converge on the same `SignalingMessage` handler. The wire
    version is an adapter-internal concern; Core sees no difference.
 
-A receiver that cannot perform NIP-44 decryption (e.g., an older build that
-predates this ADR) falls through to step 4 automatically, since the v2
-ciphertext is not valid JSON and the v1 JSON parse will fail too. That
-receiver silently discards v2 frames, which is the correct degraded behaviour.
+_(Informative.)_ A receiver that cannot perform NIP-44 decryption
+(e.g., an older build that predates this ADR) falls through to step 5
+automatically, since the v2 ciphertext is not valid JSON and the v1
+JSON parse will fail too. That receiver silently discards v2 frames,
+which is the correct degraded behaviour.
 
 ### 6. Tag and kind stability
 
@@ -166,7 +180,12 @@ The ephemeral secp256k1 keypair rotation defined in ADR-0014 §3 is
 unchanged. NIP-44 encryption is content-only; the Nostr event `pubkey`
 and `sig` fields remain the output of the ephemeral keypair and carry the
 same advisory-authenticity meaning they did in v1. The room symmetric key
-is independent of the ephemeral keypair.
+MUST be independent of the ephemeral keypair: implementations MUST NOT
+mix the ephemeral secp256k1 secret (or any other identity material) into
+the §2 HKDF derivation. Coupling the encryption identity to the
+ephemeral signaling identity would erode the privacy properties
+ADR-0014 §3 grants the keypair, and would defeat the cross-relay
+unlinkability v2 inherits from per-event nonces.
 
 ### 8. Conformance surface extension
 
@@ -175,9 +194,15 @@ is independent of the ephemeral keypair.
 - v2 round-trip: a v2 sender and v2 receiver in the same room exchange a
   `SignalingMessage` end-to-end through the in-process mock relay; the
   receiver's handler fires exactly once with the correct payload.
-- Mixed-version graceful degradation: a v1 sender and v2 receiver in the
-  same room; the v2 receiver correctly parses the v1 plaintext frame via
-  the §5 fallback path.
+- Mixed-version graceful degradation (v1 sender ↔ v2 receiver):
+  a v1 sender and v2 receiver in the same room; the v2 receiver
+  correctly parses the v1 plaintext frame via the §5 fallback path.
+- Mixed-version graceful degradation (v2 sender ↔ v1 receiver):
+  a v2 sender and a v1-only receiver in the same room; the v1-only
+  receiver discards the ciphertext silently (its v1 JSON parse fails;
+  it has no decryption path) and never surfaces a parse error to the
+  handler. This direction is the §Context motivation for locking the
+  v2 wire deterministically and MUST be observed in the gate.
 - Sentinel detection: a v2 receiver that receives a ciphertext whose
   plaintext lacks the `nv44` prefix discards the event without error.
 
@@ -200,8 +225,9 @@ this ADR:
   jointly prohibit.
 - **NIP-44 v1 (deprecated).** Only NIP-44 v2 is targeted. Implementations
   MUST NOT fall back to NIP-44 v1.
-- **Re-keying mid-session.** The room key is fixed for the lifetime of
-  the `roomId`. A new room requires a new invite and a new key derivation.
+- **Re-keying mid-session.** Implementations MUST NOT re-derive the
+  room key during the lifetime of a single `roomId`. A new room
+  requires a new invite and a new key derivation.
 - **Relay-level NIP-44 extensions.** The adapter relies on standard
   NIP-01 frames; no relay-specific encrypted-DM or group-message extension
   is used.
@@ -210,7 +236,10 @@ this ADR:
 
 - **Why NIP-44 v2.** NIP-44 v2 is the only standardised Nostr content
   cipher: it is well-specified, widely implemented in Nostr libraries, and
-  uses conservative primitives (XChaCha20-Poly1305 + HKDF-SHA256). Using a
+  uses conservative primitives (ChaCha20 + HMAC-SHA256 + HKDF-SHA256;
+  ChaCha is preferred over XChaCha because the latter is not
+  standardised, and HMAC-SHA256 over Poly1305 because polynomial MACs
+  are easier to forge under nonce reuse). Using a
   SENN-custom cipher would raise the implementation burden without improving
   the security properties relevant to this threat model.
 - **Why HKDF over the roomId rather than a separate key exchange.** The
@@ -302,4 +331,4 @@ this ADR:
 - Spec: [docs/signaling-nostr-spec.md](../signaling-nostr-spec.md) — normative wire shape; must be updated to reflect v2 content encoding.
 - Spec: [docs/room-and-invite-spec.md](../room-and-invite-spec.md) §RoomId — the `roomId` that seeds the §2 HKDF derivation.
 - Spec: [docs/security-model.md](../security-model.md) — threat model the symmetric key scope claim is grounded in.
-- NIP-44: https://github.com/nostr-protocol/nips/blob/master/44.md — normative reference for the XChaCha20-Poly1305 + HKDF-SHA256 cipher.
+- NIP-44: https://github.com/nostr-protocol/nips/blob/master/44.md — normative reference for the ChaCha20 + HMAC-SHA256 + HKDF-SHA256 cipher (encrypt-then-MAC).
