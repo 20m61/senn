@@ -2,12 +2,30 @@
 
 ## Status
 
-Proposed (2026-04-29). This ADR selects the implementation source for
-the v2 cipher contracted by [ADR-0024](0024-encrypted-nostr-signaling-nip44.md).
-Status moves to Accepted once the maintainer signs off, and to
-Implemented once `@senn/signaling-nostr` ships v2 send/receive paths
-that route through the chosen module and `pnpm verify:nostr-self-test`
-covers the new MUST clauses (ADR-0024 §8).
+**Implemented** (2026-04-30). All Status-flip preconditions are met:
+
+- `@senn/signaling-nostr` v2 send/receive paths shipped at commit
+  ff0c619 (PR #30) and route through the `nostr-tools/nip44` sub-path
+  per §2.
+- `nostr-tools/nip44.encrypt` / `.decrypt` are called with a 32-byte
+  HKDF-derived `conversationKey` per §3; `getConversationKey` is not
+  invoked anywhere in the adapter source.
+- The construction-time KAT (§5) lives in
+  `packages/signaling-nostr/src/v2.ts` and runs against the bundled
+  fixture at `packages/signaling-nostr/test/fixtures/nip44-v2-vector.json`
+  on every adapter instantiation that enables v2.
+- The license-policy amendment (§6) shipped at commit b23061e
+  (PR #29).
+- The cipher-name correction in ADR-0024 §1 (§8) shipped at commit
+  f0fee8a (PR #24).
+- `pnpm verify:nostr-self-test` covers the §7 drift-detection round-
+  trip and the four ADR-0024 §8 MUST clauses, surfaced as 9 ok lines
+  in the conformance summary.
+
+Originally Proposed 2026-04-29. This ADR selects the implementation
+source for the v2 cipher contracted by
+[ADR-0024](0024-encrypted-nostr-signaling-nip44.md). The decision
+(Option A: route through `nostr-tools/nip44`) is unchanged.
 
 ## Context
 

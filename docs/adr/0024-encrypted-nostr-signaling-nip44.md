@@ -2,12 +2,22 @@
 
 ## Status
 
-Accepted (2026-04-29). The wire shape (NIP-44 v2 cipher, room-key
-derivation, sentinel prefix, v1 fallback) is final. Implementation in
-`@senn/signaling-nostr` and the matching update to
-`docs/signaling-nostr-spec.md` ship in a follow-up PR; Status moves to
-Implemented once both are on `develop` and `pnpm verify:nostr-self-test`
-covers the new MUST clauses (§8).
+**Implemented** (2026-04-30). All Status-flip preconditions are met:
+
+- Implementation in `@senn/signaling-nostr` shipped at commit ff0c619
+  (PR #30): `packages/signaling-nostr/src/v2.ts` (HKDF derivation,
+  sentinel handling, NIP-44 v2 round-trip, construction-time KAT) and
+  the receive-path update in `packages/signaling-nostr/src/index.ts`
+  implementing the §5 7-step ordered logic.
+- `docs/signaling-nostr-spec.md` v2 section shipped at commit f0fee8a
+  (PR #24).
+- `pnpm verify:nostr-self-test` covers all four §8 MUST clauses
+  (v2 round-trip, v1↔v2 fallback, v2↔v1 silent discard, sentinel
+  detection). Reported as 9 ok lines in the conformance summary.
+
+Originally Accepted 2026-04-29. The wire shape (NIP-44 v2 cipher,
+room-key derivation, sentinel prefix, v1 fallback) was finalised at
+that time and is unchanged.
 
 ## Context
 

@@ -160,13 +160,14 @@ indicative, not committed:
   deferral; revisit when a concrete use case lands.
 - 📌 **Backpressure / flow control on binary transfer** (ADR-0011 §6)
   — explicit deferral; v1 keeps the simple framing.
-- 🟡 **Encrypted Nostr signaling** — ADR-0024 (Proposed) closes the
-  ADR-0014 §"Out of scope" deferral by locking in NIP-44 v2 over a
-  room-derived symmetric key as the OPTIONAL v2 content cipher for
-  kind-25556 events. Mandatory v1 fallback for mixed-version rooms.
-  Implementation in `@senn/signaling-nostr` follows once the ADR is
-  Accepted; threat model unchanged from ADR-0014 (invite link is
-  the trust boundary).
+- ✅ ~~**Encrypted Nostr signaling**~~ — shipped 2026-04-30 at
+  ff0c619. ADR-0024 (Implemented) closes the ADR-0014 §"Out of
+  scope" deferral with NIP-44 v2 over a room-derived symmetric
+  key as the OPTIONAL v2 content cipher for kind-25556 events.
+  Mandatory v1 fallback for mixed-version rooms. Implementation
+  source: `nostr-tools/nip44` per ADR-0027 (Implemented). Default
+  remains v1 plaintext; opt-in via
+  `new NostrSignaling({ enableV2Encryption: true, ... })`.
 
 ## Versioning
 
