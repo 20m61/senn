@@ -19,6 +19,13 @@ import type {
   Unsubscribe,
 } from "@senn/protocol";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools/pure";
+import {
+  type V2DecryptResult,
+  deriveRoomKey,
+  encryptV2,
+  runConstructionTimeKAT,
+  tryDecryptV2,
+} from "./v2.js";
 
 const SENN_NOSTR_KIND = 25556;
 const SENN_TAG_PREFIX = "senn:";
@@ -68,6 +75,22 @@ export interface NostrSignalingOptions {
    * within this window.
    */
   readonly publishTimeoutMs?: number;
+  /**
+   * Opt-in to NIP-44 v2 content encryption (ADR-0024 / ADR-0027).
+   *
+   * When `true`:
+   *   - The adapter derives a room-symmetric key per ADR-0024 §2 and
+   *     encrypts the kind-25556 `content` field with NIP-44 v2.
+   *   - On receive, the adapter tries v2 decryption first and falls
+   *     back to v1 plaintext JSON parsing per ADR-0024 §5.
+   *   - A construction-time KAT (ADR-0027 §5) runs on first publish /
+   *     subscribe; if it fails, the v2 init promise rejects and the
+   *     adapter MUST NOT silently downgrade to v1.
+   *
+   * When `false` (default), the adapter is v1-only (ADR-0014 wire shape):
+   * sends and receives plaintext JSON, ignores v2 ciphertext silently.
+   */
+  readonly enableV2Encryption?: boolean;
 }
 
 /** Subset of the Nostr event we serialize (matches nostr-tools `Event`). */
@@ -103,6 +126,26 @@ export class NostrSignaling implements SignalingTransport {
   private closed = false;
   private subCounter = 0;
   private readonly pendingAcks = new Map<string, (ok: boolean, msg?: string) => void>();
+  private readonly v2Enabled: boolean;
+  /**
+   * Resolves when the NIP-44 v2 KAT (ADR-0027 §5) succeeds, rejects
+   * if the upstream cipher envelope mismatches the bundled fixture.
+   * Awaited inside `publish()` and `subscribe()` whenever v2 is on,
+   * so a KAT failure surfaces deterministically before the first
+   * peer message — the strict reading of "throw at construction
+   * time" is impossible in JS without an async constructor; this is
+   * the closest legal pattern. `undefined` when v2 is disabled.
+   */
+  private readonly v2InitPromise: Promise<void> | undefined;
+  /**
+   * Latched v2 init failure (ADR-0027 §5a pattern #6). When the KAT
+   * rejects, this field is populated and every subsequent op
+   * (`publish`, `subscribe`) MUST surface it. Receive paths drop
+   * silently rather than v1-fallback so a failed-KAT adapter does
+   * NOT downgrade an explicitly v2-enabled receiver to v1.
+   */
+  private v2KatError: Error | null = null;
+  private readonly v2RoomKeys = new Map<RoomId, Promise<Uint8Array>>();
 
   constructor(opts: NostrSignalingOptions) {
     if (!opts.relays || opts.relays.length === 0) {
@@ -117,16 +160,28 @@ export class NostrSignaling implements SignalingTransport {
     }
     this.wsCtor = ctor;
     this.publishTimeoutMs = opts.publishTimeoutMs ?? DEFAULT_PUBLISH_TIMEOUT_MS;
+    this.v2Enabled = opts.enableV2Encryption ?? false;
+    this.v2InitPromise = this.v2Enabled ? runConstructionTimeKAT() : undefined;
+    // Latch the KAT outcome on the instance: a rejection populates
+    // `v2KatError` so every subsequent op (publish / subscribe /
+    // receive) surfaces the failure rather than silently
+    // downgrading. Also prevents an unhandled-rejection event when
+    // nothing else awaits v2InitPromise immediately.
+    this.v2InitPromise?.catch((err: unknown) => {
+      this.v2KatError =
+        err instanceof Error ? err : new Error(`senn: nostr v2 init failed: ${String(err)}`);
+    });
   }
 
   async publish(roomId: RoomId, message: SignalingMessage): Promise<void> {
     if (this.closed) throw new NostrClosedError();
+    const content = await this.encodeContent(roomId, message);
     const event = finalizeEvent(
       {
         kind: SENN_NOSTR_KIND,
         created_at: Math.floor(Date.now() / 1000),
         tags: [["t", `${SENN_TAG_PREFIX}${roomId}`]],
-        content: JSON.stringify(message),
+        content,
       },
       this.secretKey,
     ) as NostrEvent;
@@ -212,6 +267,19 @@ export class NostrSignaling implements SignalingTransport {
 
   subscribe(roomId: RoomId, handler: SignalingHandler): Unsubscribe {
     if (this.closed) throw new NostrClosedError();
+    // ADR-0027 §5 / §5a #6: a v2-enabled adapter whose KAT has
+    // already rejected MUST refuse new subscriptions rather than
+    // silently downgrade the operator's choice. The receive path
+    // also drops events silently in this state, so without this
+    // throw the operator would see no inbound traffic with no
+    // diagnostic.
+    if (this.v2KatError) throw this.v2KatError;
+    // Pre-warm the v2 room key so the first inbound event for this
+    // room can decrypt without a cold-start delay. Fire-and-forget;
+    // the actual decode in handleEvent re-awaits the cached promise.
+    if (this.v2Enabled) {
+      void this.getV2RoomKey(roomId).catch(() => undefined);
+    }
     let room = this.rooms.get(roomId);
     if (!room) {
       room = {
@@ -368,19 +436,97 @@ export class NostrSignaling implements SignalingTransport {
     if (!matched) return;
     if (matched.room.delivered.has(event.id)) return;
     matched.room.delivered.add(event.id);
-    let parsed: SignalingMessage;
-    try {
-      parsed = JSON.parse(event.content) as SignalingMessage;
-    } catch {
-      return;
-    }
-    for (const handler of matched.room.handlers) {
+    void this.decodeAndDispatch(matched.roomId, matched.room, event.content);
+  }
+
+  private async decodeAndDispatch(roomId: RoomId, room: RoomState, content: string): Promise<void> {
+    const parsed = await this.decodeContent(roomId, content);
+    if (!parsed) return; // discarded per ADR-0024 §5
+    for (const handler of room.handlers) {
       try {
         handler(parsed);
       } catch (err) {
         console.error("senn: nostr handler threw", err);
       }
     }
+  }
+
+  private async encodeContent(roomId: RoomId, message: SignalingMessage): Promise<string> {
+    if (!this.v2Enabled) return JSON.stringify(message);
+    // ADR-0027 §5: KAT must succeed before any v2 op. Re-await
+    // here so a KAT failure rejects publish() rather than producing
+    // a non-conformant ciphertext. The latched `v2KatError` is
+    // checked by publish/subscribe; here we let the promise reject
+    // re-throw to surface any rejection that occurred between
+    // construction and this op.
+    if (this.v2KatError) throw this.v2KatError;
+    await this.v2InitPromise;
+    const key = await this.getV2RoomKey(roomId);
+    return encryptV2(message, key);
+  }
+
+  /**
+   * ADR-0024 §5 receive path (7 steps). Decryption is bound to the
+   * room matched by `subId` in `handleEvent` — a v2 receiver MUST
+   * NOT accept a frame decrypted with a different room's key, even
+   * if the wire `t` tag points at the matched room. Otherwise a
+   * peer that holds room B's invite could publish a kind-25556
+   * event tagged for room A and have room A's handlers see room
+   * B's payload (Codex P1 #1, 2026-04-30).
+   *
+   * Returns a `SignalingMessage` for v2 success (steps 1–3) or v1
+   * fallback (step 5); returns `null` to discard (steps 4 / 6) —
+   * the adapter MUST NOT surface a parse error to the handler.
+   *
+   * If v2 init (KAT) failed, this path drops the event silently
+   * rather than falling through to v1 JSON.parse. Per ADR-0027 §5
+   * / §5a pattern #6, an explicitly v2-enabled receiver MUST NOT
+   * be silently downgraded to v1 — the operator chose v2, and a
+   * KAT failure means the upstream cipher's contract is broken.
+   * The latched `v2KatError` re-throws on every `publish` /
+   * `subscribe` so the operator sees the failure without relying
+   * on the receive path to surface it (Codex P1 #2, 2026-04-30).
+   */
+  private async decodeContent(roomId: RoomId, content: string): Promise<SignalingMessage | null> {
+    if (this.v2Enabled) {
+      // KAT failure — drop silently. The error is operator-visible
+      // through the next publish/subscribe, never via this private
+      // path.
+      if (this.v2KatError) return null;
+      try {
+        await this.v2InitPromise;
+      } catch {
+        // Race: v2InitPromise rejected between the check above and
+        // this await. v2KatError is set by the constructor's catch
+        // handler. Drop silently.
+        return null;
+      }
+      const key = await this.getV2RoomKey(roomId);
+      const result: V2DecryptResult = tryDecryptV2(content, key);
+      if (result.kind === "v2") return result.message;
+      if (result.kind === "v2-no-sentinel") {
+        // ADR-0024 §5 step 4: decrypt OK but no sentinel ⇒
+        // discard. MUST NOT v1-fallback for this content.
+        return null;
+      }
+      // result.kind === "decrypt-fail" — fall through to v1
+      // fallback below (ADR-0024 §5 step 5).
+    }
+    // ADR-0024 §5 step 5: v1 fallback (also the v1-only path).
+    try {
+      return JSON.parse(content) as SignalingMessage;
+    } catch {
+      return null; // step 6: drop silently
+    }
+  }
+
+  private getV2RoomKey(roomId: RoomId): Promise<Uint8Array> {
+    let promise = this.v2RoomKeys.get(roomId);
+    if (!promise) {
+      promise = deriveRoomKey(roomId);
+      this.v2RoomKeys.set(roomId, promise);
+    }
+    return promise;
   }
 }
 

@@ -1,0 +1,7 @@
+{
+  "description": "NIP-44 v2 KAT fixture for @senn/signaling-nostr v2 (ADR-0027 §5). Deterministic round-trip against nostr-tools/nip44.encrypt with fixed conversationKey + fixed nonce. The construction-time KAT (src/v2.ts runConstructionTimeKAT) re-runs this round-trip on every adapter instantiation that enables v2; a mismatch detects an upstream nostr-tools envelope-format regression (e.g., a future major bump introducing v3) at the SENN boundary rather than at the first peer-to-peer message. To regenerate after a deliberate vector update, run `node -e \"...\"` against the upstream module — see scripts/verify-nostr-self-test.ts for the regeneration helper.",
+  "plaintext": "nv44{\"type\":\"hello\",\"v\":1}",
+  "conversationKey": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+  "nonce": "a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0",
+  "ciphertext": "AqGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr/Am8/2vbzK7d4WM+waqrzDTerdBF3QWa7QdM+Wjjb96+kFmpC96RH+1hUWR12jV/MM3/t9VPGWuctsF6hvX4lS6P9b"
+}
