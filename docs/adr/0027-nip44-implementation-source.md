@@ -325,7 +325,8 @@ MUST include a regression check that scans the shipped
 (`packages/signaling-nostr/dist/**/*.{js,mjs,cjs}`) for
 `from "nostr-tools/..."` import specifiers and fails any specifier
 outside the allow-list `{ "nostr-tools/nip44", "nostr-tools/pure" }`.
-Adding a new permitted sub-path requires amending this clause.
+Adding a new permitted sub-path requires amending this allow-list
+(§5a).
 
 The allow-list rationale: `nostr-tools/nip44` is the §2-named cipher
 sub-path; `nostr-tools/pure` provides `finalizeEvent`,
