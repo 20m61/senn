@@ -57,3 +57,4 @@ archaeology.
 | 0024 | [Encrypted Nostr signaling content via NIP-44](0024-encrypted-nostr-signaling-nip44.md) | Accepted |
 | 0025 | [Default signing tool for ADR-0023 vendor-neutral provenance](0025-release-signing-tool-default.md) | Accepted |
 | 0026 | [Capability tag naming and v1 registry](0026-capability-tag-naming.md) | Implemented |
+| 0027 | [NIP-44 v2 implementation source for `@senn/signaling-nostr` v2](0027-nip44-implementation-source.md) | Proposed |
