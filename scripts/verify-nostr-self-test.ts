@@ -27,8 +27,11 @@
  * (ADR-0007) means the smoke MUST NOT bake in a default relay.
  */
 
+import { encrypt } from "nostr-tools/nip44";
+import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 import { type PeerId, type RoomId, newPeerId, newRoomId } from "../packages/protocol/src/index.js";
 import { NostrSignaling, type SignalingMessage } from "../packages/signaling-nostr/src/index.js";
+import { deriveRoomKey } from "../packages/signaling-nostr/src/v2.js";
 
 const SENN_NOSTR_KIND = 25556;
 const SENN_TAG_PREFIX = "senn:";
@@ -105,6 +108,18 @@ class MockRelay {
     };
     for (const [subId, { sock: s, filter }] of this.subs) {
       if (matches(filter, fake)) s.deliver(JSON.stringify(["EVENT", subId, fake]));
+    }
+  }
+
+  /**
+   * Inject a fully signed kind-25556 event whose content was prepared
+   * outside the SENN encode path (used to forge sentinel-less v2
+   * ciphertexts so the receive-side discard rule of ADR-0024 §5 step 4
+   * can be exercised in isolation).
+   */
+  injectRawSennEvent(event: NostrEventLike): void {
+    for (const [subId, { sock: s, filter }] of this.subs) {
+      if (matches(filter, event)) s.deliver(JSON.stringify(["EVENT", subId, event]));
     }
   }
 }
@@ -411,7 +426,186 @@ async function runChecks(): Promise<CheckResult[]> {
     }),
   );
 
-  // 5. Each NostrSignaling construction uses a fresh ephemeral keypair
+  // 5. v2 NIP-44 round-trip — v2 sender ↔ v2 receiver delivers the
+  //    SignalingMessage end-to-end (ADR-0024 §8 first bullet).
+  results.push(
+    await runCheck("v2 NIP-44 round-trip (sender + receiver both v2)", async () => {
+      FakeWebSocket.reset();
+      const relay = new MockRelay("v2-rt");
+      FakeWebSocket.bindRelay("ws://mock/v2-rt", relay);
+      const aliceTx = new NostrSignaling({
+        relays: ["ws://mock/v2-rt"],
+        wsCtor: FAKE_WS,
+        enableV2Encryption: true,
+      });
+      const bobTx = new NostrSignaling({
+        relays: ["ws://mock/v2-rt"],
+        wsCtor: FAKE_WS,
+        enableV2Encryption: true,
+      });
+      try {
+        const room = newRoomId();
+        const alice = newPeerId();
+        const inbox: SignalingMessage[] = [];
+        bobTx.subscribe(room, (m) => inbox.push(m));
+        await new Promise((r) => setTimeout(r, 5));
+        await aliceTx.publish(room, offer(alice));
+        await waitFor(() => (inbox.length > 0 ? inbox[0] : undefined));
+        const event = relay.published[0];
+        if (!event) return { ok: false, detail: "no event seen by relay" };
+        // Verify the wire content is NOT plain JSON (would parse if v1).
+        let parsedAsJson = false;
+        try {
+          JSON.parse(event.content);
+          parsedAsJson = true;
+        } catch {
+          // expected — v2 ciphertext is base64, not JSON
+        }
+        if (parsedAsJson) {
+          return {
+            ok: false,
+            detail: "wire content parsed as JSON; expected v2 base64 ciphertext",
+          };
+        }
+        const got = inbox[0];
+        if (got?.kind === "offer" && got.from === alice) return { ok: true };
+        return { ok: false, detail: `delivered ${JSON.stringify(got)}` };
+      } finally {
+        await aliceTx.close();
+        await bobTx.close();
+      }
+    }),
+  );
+
+  // 6. Mixed-version (v1 sender ↔ v2 receiver) — the v2 receiver MUST
+  //    fall back to v1 JSON.parse per ADR-0024 §5 step 5 (§8 second
+  //    bullet).
+  results.push(
+    await runCheck("mixed-version v1 sender ↔ v2 receiver (v1 fallback)", async () => {
+      FakeWebSocket.reset();
+      const relay = new MockRelay("v1tov2");
+      FakeWebSocket.bindRelay("ws://mock/v1tov2", relay);
+      const aliceTxV1 = new NostrSignaling({
+        relays: ["ws://mock/v1tov2"],
+        wsCtor: FAKE_WS,
+        // v1 by default
+      });
+      const bobTxV2 = new NostrSignaling({
+        relays: ["ws://mock/v1tov2"],
+        wsCtor: FAKE_WS,
+        enableV2Encryption: true,
+      });
+      try {
+        const room = newRoomId();
+        const alice = newPeerId();
+        const inbox: SignalingMessage[] = [];
+        bobTxV2.subscribe(room, (m) => inbox.push(m));
+        await new Promise((r) => setTimeout(r, 5));
+        await aliceTxV1.publish(room, offer(alice));
+        await waitFor(() => (inbox.length > 0 ? inbox[0] : undefined));
+        const got = inbox[0];
+        if (got?.kind === "offer" && got.from === alice) return { ok: true };
+        return { ok: false, detail: `delivered ${JSON.stringify(got)}` };
+      } finally {
+        await aliceTxV1.close();
+        await bobTxV2.close();
+      }
+    }),
+  );
+
+  // 7. Mixed-version (v2 sender ↔ v1 receiver) — the v1 receiver MUST
+  //    discard the ciphertext silently (its v1 JSON.parse fails); no
+  //    parse error surfaces to the handler (ADR-0024 §8 third bullet).
+  results.push(
+    await runCheck("mixed-version v2 sender ↔ v1 receiver (silent discard)", async () => {
+      FakeWebSocket.reset();
+      const relay = new MockRelay("v2tov1");
+      FakeWebSocket.bindRelay("ws://mock/v2tov1", relay);
+      const aliceTxV2 = new NostrSignaling({
+        relays: ["ws://mock/v2tov1"],
+        wsCtor: FAKE_WS,
+        enableV2Encryption: true,
+      });
+      const bobTxV1 = new NostrSignaling({
+        relays: ["ws://mock/v2tov1"],
+        wsCtor: FAKE_WS,
+        // v1 by default
+      });
+      try {
+        const room = newRoomId();
+        const alice = newPeerId();
+        const inbox: SignalingMessage[] = [];
+        bobTxV1.subscribe(room, (m) => inbox.push(m));
+        await new Promise((r) => setTimeout(r, 5));
+        await aliceTxV2.publish(room, offer(alice));
+        // Settle window for any erroneous fan-out.
+        await new Promise((r) => setTimeout(r, 60));
+        if (inbox.length === 0) return { ok: true };
+        return { ok: false, detail: `v1 receiver surfaced ${inbox.length} events; expected 0` };
+      } finally {
+        await aliceTxV2.close();
+        await bobTxV1.close();
+      }
+    }),
+  );
+
+  // 8. Sentinel detection — a v2 receiver decrypts a ciphertext whose
+  //    plaintext lacks the `nv44` sentinel and MUST discard without
+  //    falling back to v1 (ADR-0024 §5 step 4 / §8 fourth bullet).
+  results.push(
+    await runCheck("v2 sentinel detection (decrypt-success-without-nv44 discards)", async () => {
+      FakeWebSocket.reset();
+      const relay = new MockRelay("sentinel");
+      FakeWebSocket.bindRelay("ws://mock/sentinel", relay);
+      const bobTxV2 = new NostrSignaling({
+        relays: ["ws://mock/sentinel"],
+        wsCtor: FAKE_WS,
+        enableV2Encryption: true,
+      });
+      try {
+        const room = newRoomId();
+        const inbox: SignalingMessage[] = [];
+        bobTxV2.subscribe(room, (m) => inbox.push(m));
+        await new Promise((r) => setTimeout(r, 5));
+
+        // Build a ciphertext with the same room key but plaintext that
+        // does NOT begin with "nv44".
+        const roomKey = await deriveRoomKey(room);
+        const noSentinelPlaintext = JSON.stringify({
+          kind: "offer",
+          from: newPeerId(),
+          sdp: "x",
+        });
+        const ciphertext = encrypt(noSentinelPlaintext, roomKey);
+
+        // Forge a kind-25556 event with that ciphertext as content.
+        const sk = generateSecretKey();
+        const event = finalizeEvent(
+          {
+            kind: SENN_NOSTR_KIND,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [["t", `${SENN_TAG_PREFIX}${room}`]],
+            content: ciphertext,
+          },
+          sk,
+        ) as NostrEventLike;
+        relay.injectRawSennEvent(event);
+
+        // Settle window. v2 decryption succeeds (same key) but the
+        // sentinel check fails → adapter MUST discard.
+        await new Promise((r) => setTimeout(r, 60));
+        if (inbox.length === 0) return { ok: true };
+        return {
+          ok: false,
+          detail: `v2 receiver surfaced ${inbox.length} events for a sentinel-less ciphertext; expected 0`,
+        };
+      } finally {
+        await bobTxV2.close();
+      }
+    }),
+  );
+
+  // 9. Each NostrSignaling construction uses a fresh ephemeral keypair
   //    (spec §"Normative checklist" 4: "MUST be ephemeral by default").
   results.push(
     await runCheck("ephemeral keypair per construction", async () => {
