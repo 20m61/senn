@@ -12,6 +12,7 @@ const ALLOWED = new Set([
   "ISC",
   "0BSD",
   "CC0-1.0",
+  "Unlicense",
 ]);
 
 console.log(`license check stub — allowed licenses: ${[...ALLOWED].join(", ")}`);
