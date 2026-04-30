@@ -112,6 +112,12 @@ run "validate:all-manifests"  pnpm validate:all-manifests
 run "check:addon-forbidden"   pnpm check:addon-forbidden
 run "verify:official"         pnpm verify:official
 run "verify:http-poll-self-test"  pnpm verify:http-poll-self-test
+# verify:nostr-self-test §10 (ADR-0027 §2/§5a) scans
+# `packages/signaling-nostr/dist/**`. The earlier `typecheck` step
+# (`tsc -b --pretty`) already emits dist/ via `composite: true`, so a
+# separate build step would be redundant. If §10 fails with "dist
+# missing", the `tsc -b` invariant has been broken and the regression
+# is the typecheck step, not the verify step.
 run "verify:nostr-self-test"      pnpm verify:nostr-self-test
 run "test:registry-schema"    pnpm test:registry-schema
 run "validate:registry"       pnpm validate:registry addons/official/index.json
