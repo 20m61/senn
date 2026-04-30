@@ -13,6 +13,16 @@ SENN Core is licensed under the Apache License 2.0.
 - ISC
 - 0BSD
 - CC0-1.0
+- Unlicense
+
+The Unlicense is a public-domain dedication; functionally it is
+equivalent to CC0-1.0 (the project's own dedication of choice for
+that semantic) and 0BSD. Added 2026-04-30 as a prerequisite for
+adopting `nostr-tools` (Unlicense) per
+[ADR-0027 §6](adr/0027-nip44-implementation-source.md). Future
+public-domain-dedicated dependencies (e.g., new Unlicense or CC0-1.0
+crates) MAY be added without further policy review; other novel
+dedication forms still go through "Review Required" below.
 
 ## Review Required
 
