@@ -450,6 +450,81 @@ describe("@senn/signaling-nostr — contract", () => {
     }
   });
 
+  it("v2 receive-path is bound to the matched roomId (Codex P1 #1 — cross-room key leak)", async () => {
+    // Two rooms, one v2 receiver subscribed to roomA. An attacker
+    // injects a kind-25556 event tagged for roomA but encrypted with
+    // roomB's key. The receiver MUST NOT dispatch the roomB-encrypted
+    // payload to roomA handlers, even though roomB's key would
+    // decrypt the ciphertext successfully.
+    const roomA = newRoomId();
+    const roomB = newRoomId();
+    const roomBKey = await deriveRoomKey(roomB);
+    const roomBPlaintext = `${V2_SENTINEL}${JSON.stringify({
+      kind: "offer",
+      from: newPeerId(),
+      sdp: "from-roomB",
+    })}`;
+    const roomBCiphertext = encrypt(roomBPlaintext, roomBKey);
+
+    const bobTxV2 = new NostrSignaling({
+      relays: ["ws://mock"],
+      wsCtor: FAKE_WS,
+      enableV2Encryption: true,
+    });
+    try {
+      const inboxA: SignalingMessage[] = [];
+      bobTxV2.subscribe(roomA, (m) => inboxA.push(m));
+      // Pre-cache roomB's key so the implementation has it in its
+      // map when the cross-room event arrives. (Without this prime,
+      // the bug only triggers when the receiver is also subscribed
+      // to roomB; the prime simulates that state.)
+      bobTxV2.subscribe(roomB, () => undefined);
+
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Inject a roomB-encrypted ciphertext under roomA's t-tag.
+      await injectRawEvent(relay, roomA, roomBCiphertext);
+
+      // Settle window. inboxA MUST stay empty.
+      await new Promise((r) => setTimeout(r, 100));
+      expect(inboxA.length).toBe(0);
+    } finally {
+      await bobTxV2.close();
+    }
+  });
+
+  it("v2 KAT failure refuses subscribe / publish (Codex P1 #2 — no silent downgrade)", async () => {
+    // Construct an adapter whose v2 init eagerly fails. We cannot
+    // easily corrupt the bundled fixture from a unit test without
+    // module mocking, so we exercise the latched state directly:
+    // create the adapter, override v2KatError, and confirm publish
+    // and subscribe both throw rather than silently downgrade.
+    const tx = new NostrSignaling({
+      relays: ["ws://mock"],
+      wsCtor: FAKE_WS,
+      enableV2Encryption: true,
+    });
+    try {
+      // Wait for the (passing) KAT to settle.
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Latch a synthetic KAT error to simulate a future upstream
+      // regression detected by the construction-time gate.
+      const synthetic = new Error("synthetic NIP-44 KAT failure");
+      // biome-ignore lint/suspicious/noExplicitAny: test-only field reach for boundary verification
+      (tx as any).v2KatError = synthetic;
+
+      expect(() => tx.subscribe(newRoomId(), () => undefined)).toThrow(
+        /synthetic NIP-44 KAT failure/,
+      );
+      await expect(tx.publish(newRoomId(), offer(newPeerId()))).rejects.toThrow(
+        /synthetic NIP-44 KAT failure/,
+      );
+    } finally {
+      await tx.close();
+    }
+  });
+
   it("KAT fixture const matches the JSON file at test/fixtures/nip44-v2-vector.json (ADR-0027 §5 traceability)", async () => {
     const fixturePath = fileURLToPath(new URL("./fixtures/nip44-v2-vector.json", import.meta.url));
     const json = JSON.parse(await readFile(fixturePath, "utf8")) as {
