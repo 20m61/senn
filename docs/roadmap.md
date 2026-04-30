@@ -136,7 +136,7 @@ remove every CI/CD vendor dependency from the canonical repo.
 These are accepted in an ADR but not shipped yet. The order is
 indicative, not committed:
 
-- ✅ **`@sennjs/addon-sdk` initial npm publish** — shipped 2026-04-30
+- ✅ ~~**`@sennjs/addon-sdk` initial npm publish**~~ — shipped 2026-04-30
   (`@sennjs/addon-sdk@0.1.0`, tag `addon-sdk-v0.1.0`, commit 295c87b)
   via the ADR-0022 local-first flow. Original `@senn` scope was found
   unavailable on 2026-04-29; project moved to `@sennjs` per ADR-0019

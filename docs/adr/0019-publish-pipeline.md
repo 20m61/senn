@@ -22,8 +22,11 @@ response 2026-04-29). The published scope is `@sennjs`
 provenance story) is unchanged. See §2 amendment paragraph for the
 normative rule.
 
-The `NPM_TOKEN` secret on the repository was never required (was
-Actions-specific and ADR-0022 removed the workflow).
+The `NPM_TOKEN` secret originally specified in §5 was never
+provisioned: ADR-0022 superseded §5 (replacing the GitHub Actions
+workflow with the local `scripts/publish-addon-sdk.sh`) before the
+first publish, and the local script reads credentials from the
+maintainer's `~/.npmrc` instead.
 
 ## Context
 
