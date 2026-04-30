@@ -54,7 +54,7 @@ archaeology.
 | 0021 | [Local-first conformance gate (no dependency on GitHub Actions)](0021-local-first-conformance.md) | Implemented (hardened by 0022) |
 | 0022 | [Local-first publish pipeline (supersedes 0019 §5)](0022-local-first-publish-pipeline.md) | Implemented (first publish via this flow: `@sennjs/addon-sdk@0.1.0` 2026-04-30) |
 | 0023 | [Vendor-neutral provenance for `@senn/addon-sdk` releases](0023-vendor-neutral-provenance.md) | Proposed |
-| 0024 | [Encrypted Nostr signaling content via NIP-44](0024-encrypted-nostr-signaling-nip44.md) | Accepted |
+| 0024 | [Encrypted Nostr signaling content via NIP-44](0024-encrypted-nostr-signaling-nip44.md) | Implemented (v2 cipher in `@senn/signaling-nostr` shipped 2026-04-30 at ff0c619; spec v2 section at f0fee8a) |
 | 0025 | [Default signing tool for ADR-0023 vendor-neutral provenance](0025-release-signing-tool-default.md) | Accepted |
 | 0026 | [Capability tag naming and v1 registry](0026-capability-tag-naming.md) | Implemented |
-| 0027 | [NIP-44 v2 implementation source for `@senn/signaling-nostr` v2](0027-nip44-implementation-source.md) | Proposed |
+| 0027 | [NIP-44 v2 implementation source for `@senn/signaling-nostr` v2](0027-nip44-implementation-source.md) | Implemented (`nostr-tools/nip44` route shipped 2026-04-30 at ff0c619; license-policy at b23061e; cipher-name fix at f0fee8a) |

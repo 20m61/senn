@@ -2,12 +2,30 @@
 
 ## Status
 
-Proposed (2026-04-29). This ADR selects the implementation source for
-the v2 cipher contracted by [ADR-0024](0024-encrypted-nostr-signaling-nip44.md).
-Status moves to Accepted once the maintainer signs off, and to
-Implemented once `@senn/signaling-nostr` ships v2 send/receive paths
-that route through the chosen module and `pnpm verify:nostr-self-test`
-covers the new MUST clauses (ADR-0024 §8).
+**Implemented** (2026-04-30). All Status-flip preconditions are met:
+
+- `@senn/signaling-nostr` v2 send/receive paths shipped at commit
+  ff0c619 (PR #30) and route through the `nostr-tools/nip44` sub-path
+  per §2.
+- `nostr-tools/nip44.encrypt` / `.decrypt` are called with a 32-byte
+  HKDF-derived `conversationKey` per §3; `getConversationKey` is not
+  invoked anywhere in the adapter source.
+- The construction-time KAT (§5) lives in
+  `packages/signaling-nostr/src/v2.ts` and runs against the bundled
+  fixture at `packages/signaling-nostr/test/fixtures/nip44-v2-vector.json`
+  on every adapter instantiation that enables v2.
+- The license-policy amendment (§6) shipped at commit b23061e
+  (PR #29).
+- The cipher-name correction in ADR-0024 §1 (§8) shipped at commit
+  f0fee8a (PR #24).
+- `pnpm verify:nostr-self-test` covers the §7 drift-detection round-
+  trip and the four ADR-0024 §8 MUST clauses, surfaced as 9 ok lines
+  in the conformance summary.
+
+Originally Proposed 2026-04-29. This ADR selects the implementation
+source for the v2 cipher contracted by
+[ADR-0024](0024-encrypted-nostr-signaling-nip44.md). The decision
+(Option A: route through `nostr-tools/nip44`) is unchanged.
 
 ## Context
 
@@ -20,10 +38,14 @@ source for the cipher itself. This ADR closes that gap.
 Constraints to satisfy:
 
 - **License-policy compliance** ([`docs/license-policy.md`](../license-policy.md)).
-  Allowed licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC,
-  0BSD, CC0-1.0. Disallowed: GPL/AGPL/SSPL/BUSL/no-license/unknown.
-  "Unlicense" is unlisted and falls under "Custom licenses" → Review
-  Required.
+  Allowed licenses (at the time this ADR was authored 2026-04-29):
+  MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, CC0-1.0.
+  Disallowed: GPL/AGPL/SSPL/BUSL/no-license/unknown. "Unlicense" was
+  unlisted and fell under "Custom licenses" → Review Required at
+  authoring time; this Context bullet records the constraint as
+  originally stated. The §6 Decision below resolves it; the
+  amendment shipped at commit b23061e (PR #29). The Status block
+  above reflects the resolved state.
 - **Vendor neutrality** ([ADR-0007](0007-vendor-neutral-signaling-and-relay.md)).
   No SENN-project trust point on the signaling path; no relay-specific
   dependency.
@@ -304,18 +326,18 @@ build output.
 
 ### 6. License treatment of `nostr-tools` (Unlicense)
 
-The `nostr-tools` package's SPDX license is `Unlicense`. SENN's
-license-policy currently lists allowed (MIT, Apache-2.0, BSD-2/3,
-ISC, 0BSD, CC0-1.0), review-required, and disallowed
-(GPL/AGPL/SSPL/BUSL/no-license/unknown) tiers. `Unlicense` is not on
-any list.
+The `nostr-tools` package's SPDX license is `Unlicense`. At the time
+this ADR was authored (2026-04-29), SENN's license-policy listed
+allowed (MIT, Apache-2.0, BSD-2/3, ISC, 0BSD, CC0-1.0),
+review-required, and disallowed (GPL/AGPL/SSPL/BUSL/no-license/unknown)
+tiers. `Unlicense` was not on any list.
 
 This ADR records that `Unlicense` is acceptable for SENN dependencies
 **under the same handling as `CC0-1.0`** (effective public-domain
 dedication; OSI-approved as of 2020; commonly accepted alongside MIT
-in permissive-only stacks). A follow-up `docs/license-policy.md`
-amendment in the same PR series MUST add `Unlicense` to the Allowed
-list with a one-line note citing this ADR.
+in permissive-only stacks). The follow-up `docs/license-policy.md`
+amendment that adds `Unlicense` to the Allowed list with a one-line
+note citing this ADR shipped at commit b23061e (PR #29).
 
 This is not a license-policy weakening: the policy already permits
 `CC0-1.0`, which is functionally equivalent. The omission of
