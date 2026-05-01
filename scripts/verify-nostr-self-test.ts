@@ -27,6 +27,8 @@
  * (ADR-0007) means the smoke MUST NOT bake in a default relay.
  */
 
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { encrypt } from "nostr-tools/nip44";
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 import { type PeerId, type RoomId, newPeerId, newRoomId } from "../packages/protocol/src/index.js";
@@ -630,7 +632,84 @@ async function runChecks(): Promise<CheckResult[]> {
     }),
   );
 
+  // 10. Build-output sub-path import allow-list — every `from
+  //     "nostr-tools/..."` specifier in the shipped
+  //     `packages/signaling-nostr/dist/**/*.{js,mjs,cjs}` MUST be in
+  //     the allow-list `{ "nostr-tools/nip44", "nostr-tools/pure" }`
+  //     (ADR-0027 §2 + §5a). Catches deep paths
+  //     (`nostr-tools/lib/...`), the umbrella import (`nostr-tools`),
+  //     and unlisted siblings (`nostr-tools/nip04`, ...).
+  //
+  //     Adding a permitted sub-path requires amending ADR-0027 §5a.
+  results.push(
+    await runCheck("v2 build-output sub-path import allow-list (ADR-0027 §2/§5a)", () =>
+      Promise.resolve(scanNostrToolsImports()),
+    ),
+  );
+
   return results;
+}
+
+const NOSTR_TOOLS_ALLOWED_SUBPATHS: ReadonlySet<string> = new Set([
+  "nostr-tools/nip44",
+  "nostr-tools/pure",
+]);
+
+const NOSTR_TOOLS_IMPORT_RE = /from\s+["'](nostr-tools(?:\/[^"']+)?)["']/g;
+
+const SIGNALING_NOSTR_DIST = "packages/signaling-nostr/dist";
+
+function scanNostrToolsImports(): CheckOutcome {
+  if (!existsSync(SIGNALING_NOSTR_DIST)) {
+    return {
+      ok: false,
+      detail: `${SIGNALING_NOSTR_DIST} missing — run \`pnpm --filter @senn/signaling-nostr build\` first (or run via \`pnpm conformance\`)`,
+    };
+  }
+
+  const files = listBuildOutputs(SIGNALING_NOSTR_DIST);
+  if (files.length === 0) {
+    return {
+      ok: false,
+      detail: `${SIGNALING_NOSTR_DIST} contains no .js/.mjs/.cjs files — stale build?`,
+    };
+  }
+
+  const violations: string[] = [];
+  for (const file of files) {
+    const source = readFileSync(file, "utf8");
+    const lines = source.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i] ?? "";
+      for (const match of line.matchAll(NOSTR_TOOLS_IMPORT_RE)) {
+        const specifier = match[1] ?? "";
+        if (!NOSTR_TOOLS_ALLOWED_SUBPATHS.has(specifier)) {
+          violations.push(
+            `${file}:${i + 1}: forbidden import "${specifier}" (ADR-0027 §2/§5a; allowed: nostr-tools/nip44, nostr-tools/pure)`,
+          );
+        }
+      }
+    }
+  }
+
+  if (violations.length > 0) {
+    return { ok: false, detail: violations.join("; ") };
+  }
+  return { ok: true };
+}
+
+function listBuildOutputs(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const st = statSync(full);
+    if (st.isDirectory()) {
+      out.push(...listBuildOutputs(full));
+      continue;
+    }
+    if (/\.(?:js|mjs|cjs)$/.test(entry)) out.push(full);
+  }
+  return out;
 }
 
 async function main(): Promise<void> {

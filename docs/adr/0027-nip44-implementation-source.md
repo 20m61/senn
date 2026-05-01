@@ -320,9 +320,24 @@ try {
 ```
 
 Each pattern is forbidden by the corresponding clause; `verify:nostr-self-test`
-SHOULD include at least one regression check that grep-detects deep
-paths and umbrella imports in the shipped `@senn/signaling-nostr`
-build output.
+MUST include a regression check that scans the shipped
+`@senn/signaling-nostr` build output
+(`packages/signaling-nostr/dist/**/*.{js,mjs,cjs}`) for
+`from "nostr-tools/..."` import specifiers and fails any specifier
+outside the allow-list `{ "nostr-tools/nip44", "nostr-tools/pure" }`.
+Adding a new permitted sub-path requires amending this allow-list
+(§5a).
+
+The allow-list rationale: `nostr-tools/nip44` is the §2-named cipher
+sub-path; `nostr-tools/pure` provides `finalizeEvent`,
+`generateSecretKey`, `getPublicKey` for NIP-01 frame signing
+(ADR-0014). Any other sub-path (`nostr-tools/lib/...`,
+`nostr-tools/cjs/...`, the umbrella `nostr-tools`, or an unlisted
+sibling like `nostr-tools/nip04`) silently widens the dependency
+surface §1 names, and so MUST be rejected at the gate. The check
+runs against the build output rather than the source so a future
+build-tool change that rewrites or inlines an import is also
+caught.
 
 ### 6. License treatment of `nostr-tools` (Unlicense)
 
