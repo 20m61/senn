@@ -158,12 +158,22 @@ function validateOverride(entry: unknown, idx: number): Override {
     }
   }
   const lic = obj.license as string;
-  for (const term of DISALLOWED_PREFIXES) {
-    if (lic.startsWith(term)) {
-      throw new Error(
-        `${where}: cannot override disallowed license "${lic}" — the ${term} family is unconditionally rejected per docs/license-policy.md §Overrides`,
-      );
-    }
+  // The override `license` field MUST be a bare SPDX identifier — no
+  // expressions (no `OR`, `AND`, `WITH`, `+`, parentheses, whitespace).
+  // This closes a defense-in-depth gap where a smuggled expression like
+  // `(BUSL-1.1 OR MIT)` could slip past `isDisallowedSimple` (which
+  // matches family prefixes only) and silently grant a disallowed
+  // license cover via the override path.
+  if (!/^[A-Za-z0-9.-]+$/.test(lic)) {
+    throw new Error(
+      `${where}: license "${lic}" must be a bare SPDX identifier (no expressions, no whitespace); split into per-license override entries if multiple are needed`,
+    );
+  }
+  if (isDisallowedSimple(lic)) {
+    const matched = DISALLOWED_PREFIXES.find((t) => lic === t || lic.startsWith(`${t}-`));
+    throw new Error(
+      `${where}: cannot override disallowed license "${lic}" — the ${matched ?? lic} family is unconditionally rejected per docs/license-policy.md §Overrides`,
+    );
   }
   return obj as unknown as Override;
 }
@@ -237,7 +247,15 @@ interface EvalOutcome {
 }
 
 function isDisallowedSimple(license: string): boolean {
-  return DISALLOWED_PREFIXES.some((t) => license.startsWith(t));
+  // Match the family prefix only when followed by `-` (e.g. `GPL-3.0`,
+  // `AGPL-3.0`, `BUSL-1.1`) or as the bare identifier itself
+  // (`GPL`, `AGPL`, `SSPL`, `BUSL`). Prevents an unrelated license
+  // whose name happens to begin with `GPL...` (e.g. a hypothetical
+  // `GPLicense-Foo`) from accidentally tripping the disallow check —
+  // and also prevents the inverse: a malicious license string like
+  // `GPLicense-fake-allow` cannot bypass the disallow check by *not*
+  // matching, because we still require the canonical SPDX form.
+  return DISALLOWED_PREFIXES.some((t) => license === t || license.startsWith(`${t}-`));
 }
 
 function stripBalancedOuterParens(expr: string): string {
