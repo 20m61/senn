@@ -13,11 +13,8 @@ pnpm install --frozen-lockfile
 pnpm typecheck
 pnpm lint
 pnpm validate:addon examples/minimal-addon/manifest.json
-# Once present:
-pnpm validate:addon addons/official/local-profile/manifest.json
-pnpm validate:addon addons/official/local-vault/manifest.json
-pnpm validate:addon addons/official/whiteboard/manifest.json
-pnpm validate:addon addons/official/avatar-presence/manifest.json
+# Or, more thoroughly, validate every manifest in the workspace:
+pnpm validate:all-manifests
 ```
 
 ## Versioning
