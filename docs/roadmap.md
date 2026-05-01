@@ -169,6 +169,75 @@ indicative, not committed:
   remains v1 plaintext; opt-in via
   `new NostrSignaling({ enableV2Encryption: true, ... })`.
 
+## Residual follow-ups (snapshot 2026-05-01)
+
+Items that are accepted-in-an-ADR but not yet implemented, or that
+are policy/operational decisions waiting on a maintainer trigger.
+This is a single index so a future contributor (or AI coder) does
+not have to re-derive the residual list from individual ADRs.
+
+### Maintainer-gated (require manual key/identity ceremony)
+
+- ⬜ **First signed `@sennjs/addon-sdk` release** (ADR-0023 / ADR-0025
+  → flip to Implemented). Trigger: next release tag (`0.1.1` patch
+  or `0.2.0`). Requires the maintainer to generate a minisign keypair,
+  publish the public-key file under `docs/release-keys/`, fill the
+  `docs/governance.md` "Release signing identities" table, and run
+  `SENN_SIGN_RELEASE=minisign pnpm release:addon-sdk <tag>`. Until
+  this happens, both ADRs remain in `Proposed` / `Accepted` status.
+- ⬜ **Rotate the npm bypass-2FA token** (`senn-local-publish-2026-04-v3`,
+  expires 2026-07-26). A scheduled remote agent fires on
+  2026-06-30 09:00 JST to open a tracking issue against this repo;
+  the procedure is `docs/dev/release.md` §"Token rotation".
+- ⬜ **Secondary maintainer / key escrow** for official add-on
+  signing key + npm publish identity (`docs/security-model.md`
+  §"Single-maintainer key custody"). Not yet ADR-tracked. The
+  bootstrap maintainer SHOULD keep an offline backup of the
+  signing-key material until this lands.
+
+### Tracked deferrals (explicit "out of scope" in their ADR)
+
+- 📌 **N>2 multi-party media** (ADR-0015 §"Out of scope"). Revisit
+  when a concrete use case lands.
+- 📌 **Backpressure / flow control on binary transfer**
+  (ADR-0011 §6). v1 keeps the simple framing.
+- 📌 **NIP-44 v2 forward secrecy / per-identity authentication**
+  (ADR-0024 §"Out of scope"). Per-message DHKE and authenticated
+  key agreement are explicit deferrals.
+- 📌 **Encrypted manifest-signing keystore** (ADR-0008 §68); the
+  reference flow uses Web Crypto's non-extractable keys, CLI flows
+  use unencrypted keystores. Defer until a CLI use case lands.
+- 📌 **Manifest-signing key rotation runbook** (ADR-0010 strategy
+  exists; operational `docs/security-model.md` runbook does not).
+  Defer until a rotation is actually triggered.
+- 📌 **Tier-2 TURN deployment runbook** (ADR-0013 strategy + a
+  short `docs/turn-deployment.md` exist; deeper operational guide is
+  deferred until a deployment exercises it).
+- 📌 **Add-on submission moderation / review UI in the gallery**
+  (ADR-0016 §7; ADR-0020 schema slot for submissions exists, UI
+  does not).
+- 📌 **User-generated ratings / reviews on registry** (ADR-0020
+  §"Out of scope"). Subjective surfaces stay outside the trust
+  schema.
+
+### Open design decisions (would need a new ADR)
+
+- ⬜ **Default-on switch for `enableV2Encryption`** (ADR-0024).
+  Currently opt-in to preserve mixed-version interop. Threshold
+  for default-on (e.g., adoption signal across SENN hosts, or a
+  major version line) is undecided. Candidate: ADR-0028.
+- ⬜ **`local-profile` add-on resolution.** Listed in the early
+  roadmap, not in the v3 registry, replaced de facto by
+  per-addon `storage.local.*`. Either resurrect with a concrete
+  use case, or formally drop in an ADR addendum. Currently
+  unresolved.
+- ⬜ **`@sennjs` scope strategy for future publishable packages.**
+  ADR-0019 §2 amendment renamed `@senn/addon-sdk` →
+  `@sennjs/addon-sdk` because the `@senn` npm scope is permanently
+  unavailable. If another workspace package becomes publishable,
+  the same scope question recurs and SHOULD be settled in an ADR
+  rather than ad-hoc.
+
 ## Versioning
 
 The repository ships at `0.0.0` workspace-wide during pre-alpha.
