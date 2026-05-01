@@ -110,6 +110,7 @@ run "typecheck"               pnpm typecheck
 run "lint (biome)"            pnpm lint
 run "validate:all-manifests"  pnpm validate:all-manifests
 run "check:addon-forbidden"   pnpm check:addon-forbidden
+run "check:licenses"          pnpm check:licenses
 run "verify:official"         pnpm verify:official
 run "verify:http-poll-self-test"  pnpm verify:http-poll-self-test
 # verify:nostr-self-test §10 (ADR-0027 §2/§5a) scans
