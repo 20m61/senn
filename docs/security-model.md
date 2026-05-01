@@ -297,7 +297,9 @@ escrow.
   the keystore is restored or rotated.
 - **Mitigation.** ADR-0010 documents the rotation procedure (planned
   + emergency). `docs/governance.md` Holders table is the authoritative
-  record of current custody. A future "secondary maintainer / key
-  escrow" addition is a known follow-up (not yet ADR-tracked); until
-  it lands, the maintainer SHOULD keep an offline backup of the
-  signing-key material.
+  record of current custody. The custody policy itself —
+  including the deferral of third-party escrow, the mandatory offline
+  encrypted backup of all three sensitive secrets (official add-on
+  signing key, npm publish token, minisign release-signing key), and
+  the secondary-maintainer recruitment gate at v1.0 — is governed by
+  [ADR-0029](adr/0029-secondary-maintainer-and-key-custody.md).
