@@ -192,10 +192,15 @@ not have to re-derive the residual list from individual ADRs.
   2026-06-30 09:00 JST to open a tracking issue against this repo;
   the procedure is `docs/dev/release.md` §"Token rotation".
 - ⬜ **Secondary maintainer / key escrow** for official add-on
-  signing key + npm publish identity (`docs/security-model.md`
-  §"Single-maintainer key custody"). Not yet ADR-tracked. The
-  bootstrap maintainer SHOULD keep an offline backup of the
-  signing-key material until this lands.
+  signing key + npm publish identity + minisign release-signing key
+  (`docs/security-model.md` §"Single-maintainer key custody").
+  Policy ADR-tracked by
+  [ADR-0029](adr/0029-secondary-maintainer-and-key-custody.md)
+  (Proposed): no third-party escrow for v1, mandatory offline backup
+  of all three secrets, active recruitment of a second maintainer
+  once any package reaches v1.0. The next ADR (revising or
+  superseding ADR-0029) is gated on either a v1.0 tag, a second
+  maintainer joining, or an incident exposing the gap.
 
 ### Tracked deferrals (explicit "out of scope" in their ADR)
 
