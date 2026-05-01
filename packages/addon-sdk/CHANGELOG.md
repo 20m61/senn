@@ -36,13 +36,15 @@ both ADRs flip from Proposed/Accepted to Implemented.
 
 ### Why a no-source-change release
 
-ADR-0023 §"Activation gate" states the ADR transitions to Implemented
-when the **first** release ships a signed `.sig` + `.cert` artefact
-on its GitHub Release. The current 0.1.0 release tarball is already
-on npm and cannot be re-released; it can only be signed-after-the-fact
-out-of-band, which would not exercise the publish-script provenance
-path the ADRs are validating. A 0.1.1 patch with no source change is
-the smallest reviewable unit that exercises the path end-to-end.
+ADR-0023 §"Implementation status" and ADR-0025 §"Status" both gate
+their next status transition on the **first** release that ships a
+signed `.sig` + `.cert` artefact attached to its GitHub Release plus
+a filled-in `docs/governance.md` "Release signing identities" row.
+The current 0.1.0 release tarball is already on npm and cannot be
+re-released; it can only be signed-after-the-fact out-of-band, which
+would not exercise the publish-script provenance path the ADRs are
+validating. A 0.1.1 patch with no source change is the smallest
+reviewable unit that exercises the path end-to-end.
 
 ### Maintainer activation steps (must complete before tagging)
 
