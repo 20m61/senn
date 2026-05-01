@@ -59,9 +59,11 @@ ADR-0020) and signed under the official trust root:
 - ✅ voice-meter (`dev.senn.voice-meter`)
 - ✅ voice-call (`dev.senn.voice-call`) — ADR-0015 bidirectional A/V
 - ✅ minimal (`dev.senn.minimal`) — boilerplate
-- 📌 local-profile — listed in early roadmap; not in v3 registry
-  (replaced by per-addon profile data via `storage.local.*`). Revisit
-  if a concrete user-profile use case appears.
+- 🗑️ local-profile — formally retired by
+  [ADR-0030](adr/0030-drop-local-profile-addon.md). The single-add-on
+  use case is covered by `storage.local.*` (ADR-0005 / ADR-0006);
+  cross-add-on profile coordination requires a fresh ADR with a
+  concrete requirement.
 
 ## Phase 4: Trust Layer ✅
 
@@ -231,11 +233,13 @@ not have to re-derive the residual list from individual ADRs.
   Currently opt-in to preserve mixed-version interop. Threshold
   for default-on (e.g., adoption signal across SENN hosts, or a
   major version line) is undecided. Candidate: ADR-0028.
-- ⬜ **`local-profile` add-on resolution.** Listed in the early
-  roadmap, not in the v3 registry, replaced de facto by
-  per-addon `storage.local.*`. Either resurrect with a concrete
-  use case, or formally drop in an ADR addendum. Currently
-  unresolved.
+- ✅ **`local-profile` add-on resolution.** Resolved by
+  [ADR-0030](adr/0030-drop-local-profile-addon.md) (Proposed,
+  2026-05-01): formally retired. The add-on ID
+  `dev.senn.local-profile` and capability tag `local-profile-v1`
+  are reserved under the official trust root. A future cross-
+  add-on profile use case requires a fresh ADR under a different
+  name.
 - ⬜ **`@sennjs` scope strategy for future publishable packages.**
   ADR-0019 §2 amendment renamed `@senn/addon-sdk` →
   `@sennjs/addon-sdk` because the `@senn` npm scope is permanently
