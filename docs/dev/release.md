@@ -342,6 +342,58 @@ test write permission, prefer canary-publish over `curl` probes —
 `curl` requires the token in a Bearer header, which means extracting
 it, which the npm CLI now resists.
 
+## Token rotation
+
+The `~/.npmrc` Granular Access Token used to publish `@sennjs/addon-sdk`
+is the **only non-interactive publish path** because the maintainer's
+npm 2FA is passkey-only — a passkey cannot satisfy npm's TOTP prompt
+during automated publish. The token MUST therefore have
+"bypass two-factor authentication" enabled.
+
+The active token's name and expiry are recorded out-of-band (the
+maintainer's local notes / password manager). _Example (subject to
+rotation; this section describes the procedure, not the current
+token-of-record)_: the `senn-local-publish-2026-04-v3` token issued
+for the 0.1.0 release expires **2026-07-26**. After the expiry of
+whatever token is currently in `~/.npmrc`, every `pnpm
+release:addon-sdk <tag>` invocation will fail at the registry side
+with `403`. Rotate **before** the expiry, not after — there is no
+fallback path while the token is dead.
+
+### Rotation steps
+
+1. Visit https://www.npmjs.com/settings/<account>/tokens (logged in as
+   the maintainer who owns `@sennjs/addon-sdk`).
+2. Generate a **Granular Access Token** with the following settings —
+   any deviation has been observed to break publish:
+   - **Permissions → Packages and scopes** = "All packages and scopes"
+     + "Read and write". (Specific-mode tokens cannot create new
+     packages and have failed mid-publish on package version bumps;
+     see Troubleshooting §"npm 404 on publish".)
+   - **Bypass two-factor authentication** = enabled. (Passkey-only
+     2FA accounts have no TOTP path; the bypass is mandatory.)
+   - **Expiration** = at most 90 days. The token name SHOULD encode
+     the expiry month for grep-ability
+     (`senn-local-publish-YYYY-MM-vN`).
+3. Replace the token line in `~/.npmrc` (look for
+   `//registry.npmjs.org/:_authToken=...`). Do not commit the file.
+4. Verify with a canary publish to a personal scope (see
+   Troubleshooting §"npm 404 on publish" for the exact recipe) — this
+   confirms the new token can both create and update packages without
+   touching `@sennjs`.
+5. Update the maintainer's local notes / password manager with the
+   new token's name + expiry. The repo MUST NOT track this.
+6. Delete (revoke) the old token from
+   https://www.npmjs.com/settings/<account>/tokens once the canary
+   succeeds.
+
+### Why this is not automated
+
+A scheduled rotation routine would need access to npm's account
+settings (an interactive web flow protected by passkey). Scripted
+rotation is therefore out of scope for SENN. The mitigation is the
+calendar reminder above plus this section.
+
 ## Negative example
 
 Do **not** publish a release if any check in the pre-flight failed, or if
