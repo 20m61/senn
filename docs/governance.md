@@ -89,12 +89,19 @@ runbook.
 
 | Role | Holder | Custody |
 |------|--------|---------|
-| Bootstrap maintainer | repo owner (`20m61`) | local keystore on a single workstation |
+| Bootstrap maintainer | repo owner (`20m61`) | local keystore on a single workstation; offline encrypted backup per [ADR-0029](adr/0029-secondary-maintainer-and-key-custody.md) §2 |
 
 When a second maintainer joins, append a row in the same commit that
 adds their public key to `addons/official/index.json`. Signing
 authority is per-public-key, not per-human; one human MAY hold more
 than one key (e.g. a workstation key + a hardware-backed key).
+
+Custody policy for the three sensitive secrets (the official add-on
+signing key, the npm publish token, and the minisign release-signing
+key once generated) is governed by
+[ADR-0029](adr/0029-secondary-maintainer-and-key-custody.md). Every
+holder listed above MUST satisfy ADR-0029 §2's offline-backup
+obligation for whichever of those secrets they hold.
 
 ### Where the key lives
 

@@ -59,3 +59,4 @@ archaeology.
 | 0026 | [Capability tag naming and v1 registry](0026-capability-tag-naming.md) | Implemented |
 | 0027 | [NIP-44 v2 implementation source for `@senn/signaling-nostr` v2](0027-nip44-implementation-source.md) | Implemented (`nostr-tools/nip44` route shipped 2026-04-30 at ff0c619; license-policy at b23061e; cipher-name fix at f0fee8a) |
 | 0028 | [Default-on threshold for `enableV2Encryption` in `@senn/signaling-nostr`](0028-v2-encryption-default-on-threshold.md) | Proposed |
+| 0029 | [Secondary maintainer and key custody](0029-secondary-maintainer-and-key-custody.md) | Proposed |
