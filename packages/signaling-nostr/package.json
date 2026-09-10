@@ -19,6 +19,6 @@
     "nostr-tools": "^2.7.2"
   },
   "devDependencies": {
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.11"
   }
 }
