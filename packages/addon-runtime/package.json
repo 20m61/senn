@@ -20,7 +20,7 @@
     "@senn/storage": "workspace:*"
   },
   "devDependencies": {
-    "happy-dom": "^20.9.0",
+    "happy-dom": "^21.0.4",
     "vitest": "^4.1.11"
   }
 }
